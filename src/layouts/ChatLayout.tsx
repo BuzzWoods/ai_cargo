@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import React from "react";
 import { Layout, Menu, Button, theme } from "antd";
 import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
@@ -9,6 +9,7 @@ const { Header, Sider, Content } = Layout;
 const ChatLayout: React.FC = () => {
   const [collapsed, setCollapsed] = React.useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
@@ -19,6 +20,15 @@ const ChatLayout: React.FC = () => {
       navigate(item.path);
     }
   };
+
+  // 根据当前路径匹配菜单高亮状态
+  const activeItem = menuItems.find((i) => {
+    if (i?.path === '/') {
+      return location.pathname === '/' || location.pathname === '/chat';
+    }
+    return location.pathname.startsWith(i?.path as string);
+  });
+  const activeKey = activeItem ? (activeItem.key as string) : '1';
 
   return (
     <Layout className="h-screen overflow-hidden">
@@ -41,7 +51,7 @@ const ChatLayout: React.FC = () => {
         <Menu
           theme="dark"
           mode="inline"
-          defaultSelectedKeys={["1"]}
+          selectedKeys={[activeKey]}
           items={menuItems}
           onClick={handleMenuClick}
         />
