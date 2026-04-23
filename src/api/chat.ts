@@ -156,10 +156,13 @@ export const sendChatMessage = async ({
   onAccepted?.(acceptedResponse);
 
   let sawTerminalEvent = false;
+  const seenEventIds = new Set<string>();
+  let latestSeq = 0;
 
   await fetchEventSource(createApiUrl(acceptedResponse.sseChannel), {
     method: "GET",
     signal,
+    openWhenHidden: true,
     headers: {
       Accept: EventStreamContentType,
     },
@@ -186,6 +189,18 @@ export const sendChatMessage = async ({
       if (message.event && message.event !== parsed.type) {
         throw new Error("SSE 事件名与数据体 type 不一致");
       }
+
+      // 页面切后台再回来时，fetch-event-source 可能触发重连。
+      // 这里按 eventId / seq 去重，避免旧 delta 再次 append。
+      if (
+        seenEventIds.has(parsed.eventId) ||
+        parsed.seq <= latestSeq
+      ) {
+        return;
+      }
+
+      seenEventIds.add(parsed.eventId);
+      latestSeq = parsed.seq;
 
       if (parsed.type === "message.done" || parsed.type === "message.error") {
         sawTerminalEvent = true;
