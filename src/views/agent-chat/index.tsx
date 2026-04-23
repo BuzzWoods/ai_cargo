@@ -1,114 +1,307 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Bubble,
   Sender,
   Welcome,
   Prompts,
-  type BubbleProps,
+  type BubbleItemType,
 } from "@ant-design/x";
 import { Typography, Button, Avatar } from "antd";
-import { DeleteOutlined, UserOutlined, RobotOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  RobotOutlined,
+  UserOutlined,
+  LoadingOutlined,
+} from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import { sendChatMessage } from "../../api/chat";
+import AssistantMessageContent from "../../components/chat/AssistantMessageContent";
+import type { AssistantMessage } from "../../store/useChatStore";
 import { useChatStore } from "../../store/useChatStore";
-import { simulateChatStream } from "../../api/request";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "已取消本次生成";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "流式消息处理失败";
+};
 
 const AgentChat: React.FC = () => {
-  const { messages, addMessage, updateMessage, clearHistory } = useChatStore();
+  const navigate = useNavigate();
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const {
+    serverConversationId,
+    messages,
+    addUserMessage,
+    addAssistantPlaceholder,
+    bindServerConversationId,
+    bindUserServerConversationId,
+    bindAssistantServerMeta,
+    appendAssistantMarkdown,
+    replaceAssistantArtifact,
+    completeAssistantMessage,
+    failAssistantMessage,
+    cancelAssistantMessage,
+    setActiveArtifactId,
+    clearHistory,
+  } = useChatStore();
 
-  const onSend = (content: string) => {
-    if (!content.trim()) return;
+  const isStreaming = messages.some(
+    (message) =>
+      message.role === "assistant" &&
+      (message.status === "pending" ||
+        message.status === "accepted" ||
+        message.status === "streaming"),
+  );
 
-    // Add user message
-    addMessage({ role: "user", content, status: "done" });
-    setInputValue("");
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
-    // Simulate AI response with streaming
-    const aiId = addMessage({
-      role: "assistant",
-      content: "",
-      status: "loading",
-    });
-
-    simulateChatStream(content, (text, done) => {
-      updateMessage(aiId, {
-        content: text,
-        status: done ? "done" : "loading",
-      });
-    });
+  const handleOpenArtifact = (artifactId: string) => {
+    setActiveArtifactId(artifactId);
+    navigate("/cargo-3d");
   };
 
-  const bubbleItems = messages.map((msg) => ({
-    key: msg.id,
-    content: msg.content,
-    role: msg.role,
-    placement: (msg.role === "user"
-      ? "end"
-      : "start") as BubbleProps["placement"],
-    avatar: (
-      <Avatar
-        icon={msg.role === "user" ? <UserOutlined /> : <RobotOutlined />}
-        style={{ backgroundColor: msg.role === "user" ? "#1677ff" : "#52c41a" }}
-      />
-    ),
-    loading: msg.status === "loading",
-  }));
+  const handleClearHistory = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    clearHistory();
+  };
+
+  const onSend = async (content: string) => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent || isStreaming) {
+      return;
+    }
+
+    const { localId: localUserMessageId, clientMessageId } =
+      addUserMessage(trimmedContent);
+    const localAssistantMessageId = addAssistantPlaceholder();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setInputValue("");
+    let currentServerRequestId: string | undefined;
+    let currentServerMessageId: string | undefined;
+    const ensureAssistantServerBinding = (event: {
+      requestId: string;
+      messageId: string;
+      conversationId: string;
+      ts: string;
+    }) => {
+      currentServerRequestId ??= event.requestId;
+      currentServerMessageId ??= event.messageId;
+      bindServerConversationId(event.conversationId);
+      bindAssistantServerMeta(localAssistantMessageId, {
+        serverRequestId: event.requestId,
+        serverMessageId: event.messageId,
+        serverConversationId: event.conversationId,
+        startedAt: event.ts,
+      });
+    };
+
+    try {
+      await sendChatMessage({
+        serverConversationId,
+        clientMessageId,
+        text: trimmedContent,
+        signal: controller.signal,
+        onAccepted: (response) => {
+          currentServerRequestId = response.requestId;
+          bindServerConversationId(response.conversationId);
+          bindUserServerConversationId(
+            localUserMessageId,
+            response.conversationId,
+          );
+          bindAssistantServerMeta(localAssistantMessageId, {
+            serverRequestId: response.requestId,
+            serverConversationId: response.conversationId,
+          });
+        },
+        onEvent: (event) => {
+          if (
+            currentServerRequestId &&
+            event.requestId !== currentServerRequestId
+          ) {
+            return;
+          }
+
+          if (event.type === "message.start") {
+            ensureAssistantServerBinding(event);
+            return;
+          }
+
+          ensureAssistantServerBinding(event);
+
+          if (
+            currentServerMessageId &&
+            event.messageId !== currentServerMessageId
+          ) {
+            return;
+          }
+
+          if (event.type === "markdown.delta") {
+            appendAssistantMarkdown(
+              localAssistantMessageId,
+              event.payload.delta,
+            );
+            return;
+          }
+
+          if (event.type === "artifact.replace") {
+            replaceAssistantArtifact(
+              localAssistantMessageId,
+              event.payload.artifact,
+            );
+            return;
+          }
+
+          if (event.type === "message.done") {
+            completeAssistantMessage(localAssistantMessageId, event.ts);
+            return;
+          }
+
+          if (event.type === "message.error") {
+            failAssistantMessage(
+              localAssistantMessageId,
+              event.payload.message,
+            );
+          }
+        },
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        cancelAssistantMessage(localAssistantMessageId);
+      } else {
+        failAssistantMessage(localAssistantMessageId, getErrorMessage(error));
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  const bubbleItems: BubbleItemType[] = messages.map((message) => {
+    if (message.role === "user") {
+      return {
+        key: message.id,
+        content: (
+          <div className="whitespace-pre-wrap text-[15px] leading-7">
+            {message.text}
+          </div>
+        ),
+        role: message.role,
+        placement: "end",
+        avatar: (
+          <Avatar
+            icon={<UserOutlined />}
+            style={{ backgroundColor: "#1677ff" }}
+          />
+        ),
+        variant: "filled",
+      };
+    }
+
+    const assistantMessage = message as AssistantMessage;
+    const hasArtifact = Object.keys(assistantMessage.artifacts).length > 0;
+
+    return {
+      key: message.id,
+      content: (
+        <AssistantMessageContent
+          message={assistantMessage}
+          onOpenArtifact={handleOpenArtifact}
+        />
+      ),
+      role: message.role,
+      placement: "start",
+      avatar: (
+        <Avatar
+          icon={<RobotOutlined />}
+          style={{ backgroundColor: "#0ea5e9" }}
+        />
+      ),
+      loading:
+        !message.markdownText &&
+        !hasArtifact &&
+        (message.status === "pending" ||
+          message.status === "accepted" ||
+          message.status === "streaming"),
+      footer:
+        message.status === "pending" ||
+        message.status === "accepted" ||
+        message.status === "streaming" ? (
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <LoadingOutlined />
+            <span>正在接收 SSE 流式内容和 3D 结构数据...</span>
+          </div>
+        ) : message.status === "cancelled" ? (
+          <Text type="secondary" className="text-xs">
+            已取消本次生成
+          </Text>
+        ) : undefined,
+      variant: "shadow",
+    };
+  });
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
-        <div className="w-full max-w-4xl h-full flex flex-col">
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#f6f8fb_100%)]">
+      <div className="flex-1 overflow-hidden p-4">
+        <div className="flex h-full w-full flex-col">
           {messages.length === 0 ? (
-            <Welcome
-              variant="borderless"
-              icon={
-                <RobotOutlined style={{ fontSize: 64, color: "#1677ff" }} />
-              }
-              title="你好，我是你的专属 AI 助手"
-              description="我基于 Ant Design X 构建，拥有流畅的交互体验和极速的响应能力。"
-              extra={
-                <Prompts
-                  items={[
-                    { key: "1", label: "如何集成 Ant Design X？" },
-                    { key: "2", label: "介绍一下这个项目的技术栈" },
-                    { key: "3", label: "帮我写一段 TypeScript 代码" },
-                  ]}
-                  onItemClick={(item) => onSend(item.data.label as string)}
-                />
-              }
-            />
+            <Welcome variant="borderless" title="AI 装箱助手" />
           ) : (
             <>
-              <div className="flex justify-between items-center mb-4 px-2">
-                <Title level={4} style={{ margin: 0 }}>
-                  会话详情
-                </Title>
+              <div className="mb-4 flex shrink-0 items-center justify-between px-2">
+                <div>
+                  <Title level={4} style={{ margin: 0 }}>
+                    会话详情
+                  </Title>
+                  <Text type="secondary">
+                    当前服务端会话 ID：
+                    {serverConversationId ?? "等待后端创建"}
+                  </Text>
+                </div>
                 <Button
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
-                  onClick={clearHistory}
+                  onClick={handleClearHistory}
                 >
                   清除历史
                 </Button>
               </div>
-              <Bubble.List items={bubbleItems} className="flex-1" autoScroll />
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <Bubble.List
+                  items={bubbleItems}
+                  className="h-full"
+                  autoScroll
+                />
+              </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-white border-t border-slate-200">
-        <div className="max-w-4xl mx-auto relative">
+      <div className="border-t border-slate-200 bg-white/90 p-4 backdrop-blur">
+        <div>
           <Sender
             value={inputValue}
             onChange={setInputValue}
             onSubmit={onSend}
-            placeholder="输入您的问题..."
-            loading={messages.some((m) => m.status === "loading")}
+            placeholder="输入自然语言需求，系统会通过 HTTP + SSE 返回 markdown 说明和 3D 结构数据..."
+            loading={isStreaming}
           />
         </div>
       </div>

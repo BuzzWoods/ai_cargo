@@ -1,13 +1,13 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import React from "react";
-import { Layout, Menu, Button, theme } from "antd";
+import { Layout, Menu, Button, theme, Tooltip } from "antd";
 import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { menuItems } from "./menuConfig";
 
 const { Header, Sider, Content } = Layout;
 
 const ChatLayout: React.FC = () => {
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -38,15 +38,23 @@ const ChatLayout: React.FC = () => {
         collapsed={collapsed}
         className="shadow-lg z-10"
       >
-        <div className="flex items-center justify-center h-16 m-4 bg-white/10 rounded-lg text-white overflow-hidden">
-          <img src="/logo.svg" className="w-6 h-6 flex-shrink-0" alt="logo" />
-          <span
-            className={`text-xl font-bold font-mono tracking-tight whitespace-nowrap transition-all duration-300 ${
-              collapsed ? "w-0 opacity-0 ml-0" : "w-auto opacity-100 ml-2"
-            }`}
-          >
-            CARGO
-          </span>
+        <div className="flex items-center justify-center h-16 m-4 overflow-hidden">
+          <Tooltip title={collapsed ? "展开" : "关闭侧边"} placement="right">
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{
+                color: "white",
+                fontSize: "20px",
+                width: "100%",
+                height: "100%",
+                borderRadius: "8px",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+              }}
+              className="hover:!bg-white/20 transition-colors"
+            />
+          </Tooltip>
         </div>
         <Menu
           theme="dark"
@@ -59,18 +67,8 @@ const ChatLayout: React.FC = () => {
       <Layout>
         <Header
           style={{ padding: 0, background: colorBgContainer }}
-          className="flex items-center justify-between px-4 shadow-sm z-10"
+          className="flex items-center justify-end px-4 shadow-sm z-10"
         >
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              fontSize: "16px",
-              width: 64,
-              height: 64,
-            }}
-          />
           <div className="flex items-center space-x-4 pr-4">
             <div className="w-8 h-8 rounded-full bg-blue-500 overflow-hidden">
               <img
