@@ -71,11 +71,11 @@ const Cargo3DPage: React.FC = () => {
           <div>
             <Title level={4} style={{ marginBottom: 16 }}>装载摘要</Title>
             <div className="flex flex-col gap-2">
-              <Tag color="blue" bordered={false} className="bg-blue-50/50 w-fit">{activeArtifact.data.summary.totalItems} 件货物</Tag>
-              <Tag color="cyan" bordered={false} className="bg-cyan-50/50 w-fit">
+              <Tag color="blue" variant="filled" className="bg-blue-50/50 w-fit">{activeArtifact.data.summary.totalItems} 件货物</Tag>
+              <Tag color="cyan" variant="filled" className="bg-cyan-50/50 w-fit">
                 装载率 {(activeArtifact.data.summary.fillRate * 100).toFixed(0)}%
               </Tag>
-              <Tag color="gold" bordered={false} className="bg-orange-50/50 w-fit">
+              <Tag color="gold" variant="filled" className="bg-orange-50/50 w-fit">
                 容器 {activeArtifact.data.container.size.w} × {activeArtifact.data.container.size.h} × {activeArtifact.data.container.size.d} {activeArtifact.data.container.unit}
               </Tag>
             </div>

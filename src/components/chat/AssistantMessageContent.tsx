@@ -37,13 +37,13 @@ const AssistantMessageContent = ({
                 {artifact.title}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Tag color="blue">
+                <Tag color="blue" variant="filled">
                   {artifact.data.summary.totalItems} 件货物
                 </Tag>
-                <Tag color="cyan">
+                <Tag color="cyan" variant="filled">
                   装载率 {(artifact.data.summary.fillRate * 100).toFixed(0)}%
                 </Tag>
-                <Tag color="gold">{artifact.data.container.unit}</Tag>
+                <Tag color="gold" variant="filled">{artifact.data.container.unit}</Tag>
               </div>
             </div>
 

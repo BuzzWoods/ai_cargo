@@ -92,7 +92,7 @@ const CargoLayoutCanvas = ({
   compact = false,
 }: CargoLayoutCanvasProps) => (
   <div
-    className={`w-full overflow-hidden ${
+    className={`w-full overflow-hidden cursor-grab active:cursor-grabbing ${
       compact ? "h-72 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50" : "h-full bg-transparent"
     }`}
   >
