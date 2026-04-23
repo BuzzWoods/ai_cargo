@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import React from "react";
-import { Layout, Menu, Button, theme, Tooltip } from "antd";
+import { Layout, Menu, Tooltip } from "antd";
 import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { menuItems } from "./menuConfig";
 
@@ -10,9 +10,6 @@ const ChatLayout: React.FC = () => {
   const [collapsed, setCollapsed] = React.useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
 
   const handleMenuClick = ({ key }: { key: string }) => {
     const item = menuItems.find((i) => i?.key === key);
@@ -23,52 +20,64 @@ const ChatLayout: React.FC = () => {
 
   // 根据当前路径匹配菜单高亮状态
   const activeItem = menuItems.find((i) => {
-    if (i?.path === '/') {
-      return location.pathname === '/' || location.pathname === '/chat';
+    if (i?.path === "/") {
+      return location.pathname === "/" || location.pathname === "/chat";
     }
     return location.pathname.startsWith(i?.path as string);
   });
-  const activeKey = activeItem ? (activeItem.key as string) : '1';
+  const activeKey = activeItem ? (activeItem.key as string) : "1";
 
   return (
-    <Layout className="h-screen overflow-hidden">
+    <Layout
+      className="h-screen overflow-hidden"
+      style={{ background: "#f4f6f8" }}
+    >
       <Sider
         trigger={null}
         collapsible
         collapsed={collapsed}
-        className="shadow-lg z-10"
+        theme="light"
+        className="z-10"
       >
-        <div className="flex items-center justify-center h-16 m-4 overflow-hidden">
+        <div className="flex items-center h-[48px] ml-8 overflow-hidden">
           <Tooltip title={collapsed ? "展开" : "关闭侧边"} placement="right">
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
-              style={{
-                color: "white",
-                fontSize: "20px",
-                width: "100%",
-                height: "100%",
-                borderRadius: "8px",
-                backgroundColor: "rgba(255, 255, 255, 0.1)",
-              }}
-              className="hover:!bg-white/20 transition-colors"
-            />
+            {collapsed ? (
+              <MenuUnfoldOutlined
+                onClick={() => setCollapsed(!collapsed)}
+                style={{
+                  color: "#475569",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                }}
+              />
+            ) : (
+              <MenuFoldOutlined
+                onClick={() => setCollapsed(!collapsed)}
+                style={{
+                  color: "#475569",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                }}
+              />
+            )}
           </Tooltip>
         </div>
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
+          inlineCollapsed={collapsed}
+          inlineIndent={24}
           selectedKeys={[activeKey]}
           items={menuItems}
           onClick={handleMenuClick}
         />
       </Sider>
-      <Layout>
+      <Layout style={{ background: "transparent" }}>
         <Header
-          style={{ padding: 0, background: colorBgContainer }}
-          className="flex items-center justify-end px-4 shadow-sm z-10"
+          style={{ padding: 0, background: "transparent", height: "48px", lineHeight: "48px" }}
+          className="flex items-center justify-between px-4 z-10"
         >
+          <div className="font-bold text-lg ml-6">智慧小柜</div>
           <div className="flex items-center space-x-4 pr-4">
             <div className="w-8 h-8 rounded-full bg-blue-500 overflow-hidden">
               <img
@@ -80,11 +89,10 @@ const ChatLayout: React.FC = () => {
         </Header>
         <Content
           style={{
-            margin: "16px",
+            margin: 0,
             padding: 0,
             minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            background: "transparent",
           }}
           className="overflow-hidden relative"
         >

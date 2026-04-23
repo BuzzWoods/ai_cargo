@@ -92,16 +92,16 @@ const CargoLayoutCanvas = ({
   compact = false,
 }: CargoLayoutCanvasProps) => (
   <div
-    className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 ${
-      compact ? "h-72" : "h-[560px]"
+    className={`w-full overflow-hidden ${
+      compact ? "h-72 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50" : "h-full bg-transparent"
     }`}
   >
     <Canvas
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance" }}
     >
-      <color attach="background" args={["#f8fbff"]} />
-      <fog attach="fog" args={["#f8fbff", 28, 44]} />
+      <color attach="background" args={["#f4f6f8"]} />
+      <fog attach="fog" args={["#f4f6f8", 28, 44]} />
       <PerspectiveCamera makeDefault position={[20, 16, 22]} fov={42} />
       <ambientLight intensity={1.4} />
       <hemisphereLight intensity={0.6} groundColor="#cbd5e1" />

@@ -8,12 +8,12 @@ interface MarkdownRendererProps {
 }
 
 const headingClassNames = {
-  h1: "mt-0 mb-4 text-2xl font-semibold text-slate-900",
-  h2: "mt-0 mb-3 text-xl font-semibold text-slate-900",
-  h3: "mt-0 mb-3 text-lg font-semibold text-slate-900",
-  h4: "mt-0 mb-2 text-base font-semibold text-slate-900",
-  h5: "mt-0 mb-2 text-sm font-semibold text-slate-900",
-  h6: "mt-0 mb-2 text-sm font-semibold text-slate-700",
+  h1: "mb-1 mt-2 text-2xl font-semibold text-slate-900",
+  h2: "mb-1 mt-2 text-xl font-semibold text-slate-900",
+  h3: "mb-1 mt-2 text-lg font-semibold text-slate-900",
+  h4: "mb-1 mt-2 text-base font-semibold text-slate-900",
+  h5: "mb-1 mt-2 text-sm font-semibold text-slate-900",
+  h6: "mb-1 mt-2 text-sm font-semibold text-slate-700",
 } as const;
 
 const MarkdownRenderer = ({ markdown }: MarkdownRendererProps) => (
@@ -94,14 +94,20 @@ const MarkdownRenderer = ({ markdown }: MarkdownRendererProps) => (
         },
         table: (props: ComponentPropsWithoutRef<"table">) => (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table {...props} className="min-w-full border-collapse bg-white text-sm" />
+            <table
+              {...props}
+              className="min-w-full border-collapse bg-white text-sm"
+            />
           </div>
         ),
         thead: (props: ComponentPropsWithoutRef<"thead">) => (
           <thead {...props} className="bg-slate-50" />
         ),
         tr: (props: ComponentPropsWithoutRef<"tr">) => (
-          <tr {...props} className="border-b border-slate-200 last:border-b-0" />
+          <tr
+            {...props}
+            className="border-b border-slate-200 last:border-b-0"
+          />
         ),
         th: (props: ComponentPropsWithoutRef<"th">) => (
           <th

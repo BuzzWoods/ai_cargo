@@ -23,3 +23,44 @@ body {
 #root {
   width: 100%;
 }
+
+/* 固定菜单图标尺寸，防止折叠/展开时大小变化 */
+.menu-icon {
+  width: 18px !important;
+  height: 18px !important;
+  flex-shrink: 0;
+}
+
+/* 统一侧边栏菜单项左右 padding，消除展开/折叠的细微差异 */
+.ant-menu-inline .ant-menu-item,
+.ant-menu-inline .ant-menu-submenu-title,
+.ant-menu-inline-collapsed .ant-menu-item,
+.ant-menu-inline-collapsed .ant-menu-submenu-title {
+  padding-left: 24px !important; /* 根据实际显示微调 */
+  padding-right: 24px !important;
+}
+
+/* 为展开时的图标添加左间距 4px，折叠时保持 0 */
+.ant-menu-inline .menu-icon {
+  margin-left: 4px !important;
+}
+.ant-menu-inline-collapsed .menu-icon {
+  margin-left: 0 !important;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.scrollbar-hide::-webkit-scrollbar,
+.scrollbar-hide *::-webkit-scrollbar {
+  display: none !important;
+}
+.scrollbar-hide,
+.scrollbar-hide * {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+/* 移除侧边栏菜单右侧边框线 */
+.ant-menu-inline, 
+.ant-menu-vertical {
+  border-inline-end: none !important;
+}

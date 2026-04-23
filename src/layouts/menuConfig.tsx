@@ -9,13 +9,13 @@ export type MenuItem = Required<MenuProps>["items"][number] & {
 export const menuItems: MenuItem[] = [
   {
     key: "1",
-    icon: <MessageSquare size={18} />,
+    icon: <MessageSquare size={18} className="menu-icon" />, // 固定大小
     label: "AI Chat",
     path: "/",
   },
   {
     key: "2",
-    icon: <Box size={18} />,
+    icon: <Box size={18} className="menu-icon" />, // 固定大小
     label: "3D View",
     path: "/cargo-3d",
   },

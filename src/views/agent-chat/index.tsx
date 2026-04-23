@@ -1,25 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Bubble,
-  Sender,
-  Welcome,
-  Prompts,
-  type BubbleItemType,
-} from "@ant-design/x";
-import { Typography, Button, Avatar } from "antd";
+import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
+import { Typography, Button } from "antd";
 import {
   DeleteOutlined,
-  RobotOutlined,
-  UserOutlined,
   LoadingOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { Dropdown, type MenuProps } from "antd";
 import { sendChatMessage } from "../../api/chat";
 import AssistantMessageContent from "../../components/chat/AssistantMessageContent";
 import type { AssistantMessage } from "../../store/useChatStore";
 import { useChatStore } from "../../store/useChatStore";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof DOMException && error.name === "AbortError") {
@@ -53,6 +47,31 @@ const AgentChat: React.FC = () => {
     setActiveArtifactId,
     clearHistory,
   } = useChatStore();
+
+  const [isExiting, setIsExiting] = useState(false);
+  const [showHistory, setShowHistory] = useState(messages.length > 0);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setShowHistory(false);
+      setIsExiting(false);
+    } else if (!isExiting) {
+      setShowHistory(true);
+    }
+  }, [messages.length, isExiting]);
+
+  const handleSend = async (content: string) => {
+    if (messages.length === 0) {
+      setIsExiting(true);
+      // 等待动画进行一半左右再触发请求，增强衔接感
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      onSend(content);
+      setIsExiting(false);
+      setShowHistory(true);
+    } else {
+      onSend(content);
+    }
+  };
 
   const isStreaming = messages.some(
     (message) =>
@@ -203,12 +222,6 @@ const AgentChat: React.FC = () => {
         ),
         role: message.role,
         placement: "end",
-        avatar: (
-          <Avatar
-            icon={<UserOutlined />}
-            style={{ backgroundColor: "#1677ff" }}
-          />
-        ),
         variant: "filled",
       };
     }
@@ -226,12 +239,6 @@ const AgentChat: React.FC = () => {
       ),
       role: message.role,
       placement: "start",
-      avatar: (
-        <Avatar
-          icon={<RobotOutlined />}
-          style={{ backgroundColor: "#0ea5e9" }}
-        />
-      ),
       loading:
         !message.markdownText &&
         !hasArtifact &&
@@ -244,45 +251,77 @@ const AgentChat: React.FC = () => {
         message.status === "streaming" ? (
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <LoadingOutlined />
-            <span>正在接收 SSE 流式内容和 3D 结构数据...</span>
+            <span>正在为您规划装箱方案...</span>
           </div>
         ) : message.status === "cancelled" ? (
           <Text type="secondary" className="text-xs">
             已取消本次生成
           </Text>
         ) : undefined,
-      variant: "shadow",
+      variant: "borderless",
     };
   });
 
+  const renderSender = () => {
+    const items: MenuProps["items"] = [
+      {
+        key: "clear",
+        label: "清除历史",
+        danger: true,
+        icon: <DeleteOutlined />,
+        onClick: handleClearHistory,
+      },
+    ];
+
+    return (
+      <Sender
+        value={inputValue}
+        onChange={setInputValue}
+        onSubmit={handleSend}
+        placeholder="描述您的装箱需求，例如：100个纸箱如何装进 20GP 集装箱？"
+        loading={isStreaming}
+        prefix={
+          <Dropdown menu={{ items }} placement="topLeft">
+            <Button type="text" icon={<MoreOutlined />} />
+          </Dropdown>
+        }
+      />
+    );
+  };
+
   return (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#f8fbff_0%,#f6f8fb_100%)]">
-      <div className="flex-1 overflow-hidden p-4">
-        <div className="flex h-full w-full flex-col">
-          {messages.length === 0 ? (
-            <Welcome variant="borderless" title="AI 装箱助手" />
-          ) : (
+    <div className="flex h-full flex-col bg-transparent">
+      <div className="flex-1 overflow-hidden p-4 flex flex-col">
+        {/* 顶部伸缩占位 - 用于将内容推向中间 */}
+        <div
+          className={`transition-all duration-500 ease-in-out flex flex-col items-center justify-end pb-4 ${
+            !showHistory ? "flex-1" : "flex-0 h-0 opacity-0 overflow-hidden"
+          }`}
+        >
+          <div
+            className={`transition-opacity duration-400 ${
+              isExiting ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            <Welcome
+              variant="borderless"
+              title="您好，我是您的智能装柜助手，今天有什么可以帮您？"
+            />
+          </div>
+        </div>
+
+        {/* 聊天记录区域 */}
+        <div
+          className={`mx-auto w-full max-w-4xl flex flex-col transition-all duration-500 ${
+            showHistory
+              ? "flex-1 min-h-0 opacity-100"
+              : "h-0 opacity-0 overflow-hidden"
+          }`}
+        >
+          {showHistory && (
             <>
-              <div className="mb-4 flex shrink-0 items-center justify-between px-2">
-                <div>
-                  <Title level={4} style={{ margin: 0 }}>
-                    会话详情
-                  </Title>
-                  <Text type="secondary">
-                    当前服务端会话 ID：
-                    {serverConversationId ?? "等待后端创建"}
-                  </Text>
-                </div>
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={handleClearHistory}
-                >
-                  清除历史
-                </Button>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              {/* {renderHeader()} */}
+              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
                 <Bubble.List
                   items={bubbleItems}
                   className="h-full"
@@ -292,18 +331,22 @@ const AgentChat: React.FC = () => {
             </>
           )}
         </div>
-      </div>
 
-      <div className="border-t border-slate-200 bg-white/90 p-4 backdrop-blur">
-        <div>
-          <Sender
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={onSend}
-            placeholder="输入自然语言需求，系统会通过 HTTP + SSE 返回 markdown 说明和 3D 结构数据..."
-            loading={isStreaming}
-          />
+        {/* 输入框区域 - 在中间和底部之间平滑移动 */}
+        <div
+          className={`mx-auto w-full max-w-4xl transition-all duration-500 ease-in-out z-20 ${
+            !showHistory ? "py-2" : "pt-4 pb-2"
+          }`}
+        >
+          {renderSender()}
         </div>
+
+        {/* 底部伸缩占位 */}
+        <div
+          className={`transition-all duration-500 ease-in-out ${
+            !showHistory ? "flex-1" : "flex-0 h-0"
+          }`}
+        />
       </div>
     </div>
   );

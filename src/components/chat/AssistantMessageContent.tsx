@@ -22,16 +22,16 @@ const AssistantMessageContent = ({
         <MarkdownRenderer markdown={message.markdownText} />
       ) : (
         <Text type="secondary">
-          {message.status === "error" ? "消息生成失败" : "正在准备回复内容..."}
+          {message.status === "error" ? "方案生成遇到了一点问题" : "正在为您规划装箱方案，请稍候..."}
         </Text>
       )}
 
       {artifacts.map((artifact) => (
         <div
           key={artifact.id}
-          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+          className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white/50 backdrop-blur-sm"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 bg-slate-100/30 px-4 py-3">
             <div className="space-y-1">
               <div className="text-sm font-semibold text-slate-900">
                 {artifact.title}
