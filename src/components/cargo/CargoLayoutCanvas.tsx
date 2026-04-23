@@ -90,36 +90,50 @@ const CargoLayoutScene = ({ artifact }: { artifact: CargoLayoutArtifact }) => {
 const CargoLayoutCanvas = ({
   artifact,
   compact = false,
-}: CargoLayoutCanvasProps) => (
-  <div
-    className={`w-full overflow-hidden cursor-grab active:cursor-grabbing ${
-      compact ? "h-72 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50" : "h-full bg-transparent"
-    }`}
-  >
-    <Canvas
-      dpr={[1, 2]}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
+}: CargoLayoutCanvasProps) => {
+  const containerHeight = artifact.data.container.size.h;
+  const floorY = -(containerHeight / 2) - 0.02;
+  const sceneVerticalOffset = compact ? 0.7 : 1.25;
+
+  return (
+    <div
+      className={`w-full overflow-hidden cursor-grab active:cursor-grabbing ${
+        compact
+          ? "h-72 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50"
+          : "h-full bg-transparent"
+      }`}
     >
-      <color attach="background" args={["#f4f6f8"]} />
-      <fog attach="fog" args={["#f4f6f8", 28, 44]} />
-      <PerspectiveCamera makeDefault position={[20, 16, 22]} fov={42} />
-      <ambientLight intensity={1.4} />
-      <hemisphereLight intensity={0.6} groundColor="#cbd5e1" />
-      <directionalLight position={[12, 14, 8]} intensity={2.8} />
-      <directionalLight position={[-10, 6, -4]} intensity={0.5} />
-      <gridHelper args={[28, 28, "#cbd5e1", "#e2e8f0"]} position={[0, -3.02, 0]} />
-      <Bounds fit clip observe margin={compact ? 1.15 : 1.25}>
-        <CargoLayoutScene artifact={artifact} />
-      </Bounds>
-      <OrbitControls
-        makeDefault
-        enableDamping
-        dampingFactor={0.05}
-        minDistance={8}
-        maxDistance={48}
-      />
-    </Canvas>
-  </div>
-);
+      <Canvas
+        dpr={[1, 2]}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+      >
+        <color attach="background" args={["#f4f6f8"]} />
+        <fog attach="fog" args={["#f4f6f8", 60, 120]} />
+        <PerspectiveCamera makeDefault position={[25, 12, 25]} fov={40} />
+        <ambientLight intensity={1.4} />
+        <hemisphereLight intensity={0.6} groundColor="#cbd5e1" />
+        <directionalLight position={[12, 14, 8]} intensity={2.8} />
+        <directionalLight position={[-10, 6, -4]} intensity={0.5} />
+        <gridHelper
+          args={[28, 28, "#cbd5e1", "#e2e8f0"]}
+          position={[0, floorY + sceneVerticalOffset, 0]}
+        />
+        <Bounds fit clip observe margin={compact ? 1.15 : 1.25}>
+          <group position={[0, sceneVerticalOffset, 0]}>
+            <CargoLayoutScene artifact={artifact} />
+          </group>
+        </Bounds>
+        <OrbitControls
+          makeDefault
+          enableDamping
+          dampingFactor={0.05}
+          minDistance={12}
+          maxDistance={38}
+          target={[0, 0.5, 0]}
+        />
+      </Canvas>
+    </div>
+  );
+};
 
 export default CargoLayoutCanvas;

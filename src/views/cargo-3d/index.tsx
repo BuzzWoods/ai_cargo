@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Card, Empty, Tag, Typography, Tooltip } from "antd";
+import { Button, Empty, Tag, Typography, Tooltip } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import CargoLayoutCanvas from "../../components/cargo/CargoLayoutCanvas";
