@@ -432,19 +432,38 @@ type CargoLayoutArtifact = {
       id: string;
       size: { w: number; h: number; d: number };
       unit: "m" | "cm" | "mm";
-      origin: "container-center";
-      axis: "x-right-y-up-z-forward";
     };
-    items: Array<{
+    cargoBasicInfos: Array<{
       id: string;
-      label: string;
-      size: { w: number; h: number; d: number };
+      sku: string;
+      name: string;
+      category?: string;
+      quantity: number;
+      packageType: "carton" | "pallet" | "crate" | "bag" | "drum" | "other";
+      stackable: boolean;
+      fragile: boolean;
+      dangerousGoods: boolean;
+      temperatureControlled: boolean;
+      origin?: string;
+      destination?: string;
+      meta?: {
+        note?: string;
+      };
+    }>;
+    cargoSpecs: Record<
+      string,
+      {
+        weightKg: number;
+        dimensions: { w: number; h: number; d: number };
+        volumeM3?: number;
+      }
+    >;
+    placements: Array<{
+      id: string;
+      cargoId: string;
       position: { x: number; y: number; z: number };
       color: string;
       meta?: {
-        sku?: string;
-        weightKg?: number;
-        stackable?: boolean;
         note?: string;
       };
     }>;
@@ -459,10 +478,11 @@ type CargoLayoutArtifact = {
 
 ## 8.1 语义约束
 
+- `cargoBasicInfos` 是货物主数据，只描述是什么、数量、包装和业务属性
+- `cargoSpecs` 是货物规格数据，按 `cargoId` 维护重量和尺寸
+- `placements` 是货物摆放信息，只描述位置和渲染相关信息
 - `position` 表示货物几何中心坐标
-- 原点为容器中心
-- 坐标轴固定为 `x-right-y-up-z-forward`
-- `size.w/h/d` 必须大于 0
+- `dimensions.w/h/d` 必须大于 0
 - `fillRate` 推荐使用 0 到 1 的小数
 - `color` 推荐使用十六进制颜色，例如 `#60a5fa`
 
@@ -478,21 +498,42 @@ type CargoLayoutArtifact = {
     "container": {
       "id": "container_40hq_demo",
       "size": { "w": 16, "h": 6, "d": 6 },
-      "unit": "m",
-      "origin": "container-center",
-      "axis": "x-right-y-up-z-forward"
+      "unit": "m"
     },
-    "items": [
+    "cargoBasicInfos": [
       {
         "id": "cargo_001",
-        "label": "SKU-A x2",
-        "size": { "w": 2, "h": 1, "d": 1 },
+        "sku": "SKU-A",
+        "name": "电子配件",
+        "category": "3C配件",
+        "quantity": 2,
+        "packageType": "carton",
+        "stackable": true,
+        "fragile": true,
+        "dangerousGoods": false,
+        "temperatureControlled": false,
+        "origin": "深圳",
+        "destination": "上海",
+        "meta": {
+          "note": "轻拿轻放"
+        }
+      }
+    ],
+    "cargoSpecs": {
+      "cargo_001": {
+        "weightKg": 120,
+        "dimensions": { "w": 2, "h": 1, "d": 1 },
+        "volumeM3": 0.2
+      }
+    },
+    "placements": [
+      {
+        "id": "placement_001",
+        "cargoId": "cargo_001",
         "position": { "x": -7, "y": -2.5, "z": -2.5 },
         "color": "#60a5fa",
         "meta": {
-          "sku": "SKU-A",
-          "weightKg": 120,
-          "stackable": true
+          "note": "靠左侧底部摆放"
         }
       }
     ],

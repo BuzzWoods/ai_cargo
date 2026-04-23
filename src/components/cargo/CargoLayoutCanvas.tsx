@@ -6,16 +6,45 @@ import {
   PerspectiveCamera,
 } from "@react-three/drei";
 import * as THREE from "three";
-import type { CargoLayoutArtifact } from "../../api/protocol";
+import type {
+  CargoLayoutArtifact,
+  CargoPlacement,
+} from "../../api/protocol";
 
 interface CargoLayoutCanvasProps {
   artifact: CargoLayoutArtifact;
   compact?: boolean;
+  interactive?: boolean;
+  selectedPlacementId?: string | null;
+  onPlacementSelect?: (placement: CargoPlacement) => void;
 }
 
-const CargoLayoutScene = ({ artifact }: { artifact: CargoLayoutArtifact }) => {
-  const { container, items } = artifact.data;
+const CargoLayoutScene = ({
+  artifact,
+  interactive = false,
+  selectedPlacementId,
+  onPlacementSelect,
+}: {
+  artifact: CargoLayoutArtifact;
+  interactive?: boolean;
+  selectedPlacementId?: string | null;
+  onPlacementSelect?: (placement: CargoPlacement) => void;
+}) => {
+  const { container, cargoSpecs, placements } = artifact.data;
   const { w, h, d } = container.size;
+  const getBoxSize = (cargoId: string) => {
+    const spec = cargoSpecs[cargoId];
+
+    if (!spec) {
+      return [0.4, 0.4, 0.4] as const;
+    }
+
+    return [
+      Math.max(spec.dimensions.w, 0.1),
+      Math.max(spec.dimensions.h, 0.1),
+      Math.max(spec.dimensions.d, 0.1),
+    ] as const;
+  };
 
   return (
     <group>
@@ -69,20 +98,43 @@ const CargoLayoutScene = ({ artifact }: { artifact: CargoLayoutArtifact }) => {
         <Edges scale={1} color="#0284c7" />
       </mesh>
 
-      {items.map((item) => (
-        <mesh
-          key={item.id}
-          position={[item.position.x, item.position.y, item.position.z]}
-        >
-          <boxGeometry args={[item.size.w, item.size.h, item.size.d]} />
-          <meshStandardMaterial
-            color={item.color}
-            roughness={0.7}
-            metalness={0.08}
-          />
-          <Edges scale={1} threshold={2} color="#0f172a" />
-        </mesh>
-      ))}
+      {placements.map((placement) => {
+        const selected = placement.id === selectedPlacementId;
+        const [boxW, boxH, boxD] = getBoxSize(placement.cargoId);
+
+        return (
+          <mesh
+            key={placement.id}
+            position={[
+              placement.position.x,
+              placement.position.y,
+              placement.position.z,
+            ]}
+            onPointerDown={
+              interactive
+                ? (event) => {
+                    event.stopPropagation();
+                    onPlacementSelect?.(placement);
+                  }
+                : undefined
+            }
+          >
+            <boxGeometry args={[boxW, boxH, boxD]} />
+            <meshStandardMaterial
+              color={placement.color}
+              roughness={0.72}
+              metalness={0.08}
+              emissive={selected ? "#f59e0b" : "#000000"}
+              emissiveIntensity={selected ? 0.28 : 0}
+            />
+            <Edges
+              scale={1}
+              threshold={2}
+              color={selected ? "#f59e0b" : "#0f172a"}
+            />
+          </mesh>
+        );
+      })}
     </group>
   );
 };
@@ -90,6 +142,9 @@ const CargoLayoutScene = ({ artifact }: { artifact: CargoLayoutArtifact }) => {
 const CargoLayoutCanvas = ({
   artifact,
   compact = false,
+  interactive = false,
+  selectedPlacementId = null,
+  onPlacementSelect,
 }: CargoLayoutCanvasProps) => {
   const containerHeight = artifact.data.container.size.h;
   const floorY = -(containerHeight / 2) - 0.02;
@@ -97,7 +152,7 @@ const CargoLayoutCanvas = ({
 
   return (
     <div
-      className={`w-full overflow-hidden cursor-grab active:cursor-grabbing ${
+      className={`w-full overflow-hidden ${
         compact
           ? "h-72 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50"
           : "h-full bg-transparent"
@@ -106,6 +161,9 @@ const CargoLayoutCanvas = ({
       <Canvas
         dpr={[1, 2]}
         gl={{ antialias: true, powerPreference: "high-performance" }}
+        className={
+          interactive ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+        }
       >
         <color attach="background" args={["#f4f6f8"]} />
         <fog attach="fog" args={["#f4f6f8", 60, 120]} />
@@ -120,7 +178,12 @@ const CargoLayoutCanvas = ({
         />
         <Bounds fit clip observe margin={compact ? 1.15 : 1.25}>
           <group position={[0, sceneVerticalOffset, 0]}>
-            <CargoLayoutScene artifact={artifact} />
+            <CargoLayoutScene
+              artifact={artifact}
+              interactive={interactive}
+              selectedPlacementId={selectedPlacementId}
+              onPlacementSelect={onPlacementSelect}
+            />
           </group>
         </Bounds>
         <OrbitControls
@@ -130,6 +193,7 @@ const CargoLayoutCanvas = ({
           minDistance={12}
           maxDistance={38}
           target={[0, 0.5, 0]}
+          enablePan={interactive}
         />
       </Canvas>
     </div>

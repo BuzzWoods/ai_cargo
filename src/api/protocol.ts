@@ -31,27 +31,55 @@ export interface CargoContainer {
   id: string;
   size: CargoDimensions;
   unit: "m" | "cm" | "mm";
-  origin: "container-center";
-  axis: "x-right-y-up-z-forward";
 }
 
-export interface CargoLayoutItem {
+export type CargoPackageType =
+  | "carton"
+  | "pallet"
+  | "crate"
+  | "bag"
+  | "drum"
+  | "other";
+
+export interface CargoBasicInfo {
   id: string;
-  label: string;
-  size: CargoDimensions;
+  sku: string;
+  name: string;
+  category?: string;
+  quantity: number;
+  packageType: CargoPackageType;
+  stackable: boolean;
+  fragile: boolean;
+  dangerousGoods: boolean;
+  temperatureControlled: boolean;
+  origin?: string;
+  destination?: string;
+  meta?: {
+    note?: string;
+  };
+}
+
+export interface CargoSpec {
+  weightKg: number;
+  dimensions: CargoDimensions;
+  volumeM3?: number;
+}
+
+export interface CargoPlacement {
+  id: string;
+  cargoId: string;
   position: CargoPosition;
   color: string;
   meta?: {
-    sku?: string;
-    weightKg?: number;
-    stackable?: boolean;
     note?: string;
   };
 }
 
 export interface CargoLayoutArtifactData {
   container: CargoContainer;
-  items: CargoLayoutItem[];
+  cargoBasicInfos: CargoBasicInfo[];
+  cargoSpecs: Record<string, CargoSpec>;
+  placements: CargoPlacement[];
   summary: {
     totalItems: number;
     fillRate: number;

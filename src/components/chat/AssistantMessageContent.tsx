@@ -53,7 +53,7 @@ const AssistantMessageContent = ({
           </div>
 
           <div className="p-3">
-            <CargoLayoutCanvas artifact={artifact} compact />
+            <CargoLayoutCanvas artifact={artifact} compact interactive={false} />
           </div>
         </div>
       ))}
