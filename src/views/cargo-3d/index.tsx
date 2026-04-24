@@ -4,6 +4,14 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import CargoLayoutCanvas from "../../components/cargo/CargoLayoutCanvas";
 import CargoInfoCard from "../../components/cargo/CargoInfoCard";
+import {
+  clampPositionToContainer,
+  findCollidingPlacement,
+  getEffectiveBoxSize,
+  rotateRightAngle,
+  roundPosition,
+  type EditableCargoPlacement,
+} from "../../components/cargo/cargoLayoutMath";
 import { useChatStore } from "../../store/useChatStore";
 
 const { Paragraph, Text, Title } = Typography;
@@ -14,6 +22,10 @@ const Cargo3DPage: React.FC = () => {
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(
     null,
   );
+  const [editablePlacements, setEditablePlacements] = useState<
+    EditableCargoPlacement[]
+  >([]);
+  const [dragNotice, setDragNotice] = useState<string | null>(null);
 
   const artifacts = messages
     .filter((message) => message.role === "assistant")
@@ -23,13 +35,16 @@ const Cargo3DPage: React.FC = () => {
     artifacts.find((artifact) => artifact.id === activeArtifactId) ??
     (artifacts.length ? artifacts[artifacts.length - 1] : null) ??
     null;
+  const activeArtifactPlacements = activeArtifact?.data.placements;
   const cargoInfoById = new Map(
     activeArtifact?.data.cargoBasicInfos.map((item) => [item.id, item]) ?? [],
   );
 
   useEffect(() => {
-    setSelectedPlacementId(activeArtifact?.data.placements[0]?.id ?? null);
-  }, [activeArtifact?.id]);
+    setSelectedPlacementId(activeArtifactPlacements?.[0]?.id ?? null);
+    setEditablePlacements(activeArtifactPlacements ?? []);
+    setDragNotice(null);
+  }, [activeArtifact?.id, activeArtifactPlacements]);
 
   if (!activeArtifact) {
     return (
@@ -45,6 +60,65 @@ const Cargo3DPage: React.FC = () => {
       </div>
     );
   }
+
+  const displayPlacements: EditableCargoPlacement[] = editablePlacements.length
+    ? editablePlacements
+    : activeArtifact.data.placements;
+  const displayArtifact = {
+    ...activeArtifact,
+    data: {
+      ...activeArtifact.data,
+      placements: displayPlacements,
+    },
+  };
+  const selectedPlacement =
+    displayPlacements.find((placement) => placement.id === selectedPlacementId) ??
+    null;
+  const rotateSelectedPlacement = () => {
+    if (!selectedPlacement) {
+      return;
+    }
+
+    const nextRotationY = rotateRightAngle(selectedPlacement.rotationY);
+    const nextBoxSize = getEffectiveBoxSize(
+      selectedPlacement.cargoId,
+      activeArtifact.data.cargoSpecs,
+      nextRotationY,
+    );
+    const { position, constrained } = clampPositionToContainer(
+      selectedPlacement.position,
+      nextBoxSize,
+      activeArtifact.data.container.size,
+    );
+    const candidatePlacement = {
+      ...selectedPlacement,
+      rotationY: nextRotationY,
+      position: roundPosition(position),
+    };
+    const collidingPlacement = findCollidingPlacement(
+      candidatePlacement,
+      candidatePlacement.position,
+      displayPlacements,
+      activeArtifact.data.cargoSpecs,
+    );
+
+    if (collidingPlacement) {
+      setDragNotice("旋转后会与其他货物碰撞，已取消本次旋转");
+      return;
+    }
+
+    setEditablePlacements((currentPlacements) =>
+      (currentPlacements.length
+        ? currentPlacements
+        : activeArtifact.data.placements
+      ).map((placement) =>
+        placement.id === selectedPlacement.id ? candidatePlacement : placement,
+      ),
+    );
+    setDragNotice(
+      constrained ? "旋转后已自动贴合集装箱边界" : "已将选中货物旋转 90°",
+    );
+  };
 
   return (
     <div className="flex h-full flex-col bg-transparent px-6 py-4">
@@ -69,6 +143,30 @@ const Cargo3DPage: React.FC = () => {
             在这里，您可以 360 度全方位查看 AI
             为您生成的详细装箱方案及装载建议。
           </Paragraph>
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <Tag color="blue" variant="filled" className="m-0">
+              拖拽编辑
+            </Tag>
+            <Tag
+              color={dragNotice ? "orange" : "green"}
+              variant="filled"
+              className="m-0"
+            >
+              {dragNotice ?? "边界与碰撞检测已开启"}
+            </Tag>
+            <Tag color="purple" variant="filled" className="m-0">
+              Shift + 拖动可抬升
+            </Tag>
+            <Button
+              size="small"
+              type="primary"
+              ghost
+              disabled={!selectedPlacement}
+              onClick={rotateSelectedPlacement}
+            >
+              旋转选中货物 90°
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -76,11 +174,31 @@ const Cargo3DPage: React.FC = () => {
       <div className="grid flex-1 min-h-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="h-full overflow-hidden rounded-3xl bg-white/40 backdrop-blur-sm">
           <CargoLayoutCanvas
-            artifact={activeArtifact}
+            artifact={displayArtifact}
             interactive
             selectedPlacementId={selectedPlacementId}
             onPlacementSelect={(placement) => {
               setSelectedPlacementId(placement.id);
+            }}
+            onPlacementMove={(placementId, position) => {
+              setEditablePlacements((currentPlacements) =>
+                (currentPlacements.length
+                  ? currentPlacements
+                  : activeArtifact.data.placements
+                ).map((placement) =>
+                  placement.id === placementId
+                    ? { ...placement, position }
+                    : placement,
+                ),
+              );
+              setDragNotice(null);
+            }}
+            onPlacementMoveBlocked={(detail) => {
+              setDragNotice(
+                detail.reason === "collision"
+                  ? "检测到货物碰撞，已阻止重叠摆放"
+                  : "已限制在集装箱边界内",
+              );
             }}
           />
         </div>
@@ -88,7 +206,7 @@ const Cargo3DPage: React.FC = () => {
         <div className="min-h-0 overflow-y-auto rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-sm backdrop-blur-sm scrollbar-hide">
           <div className="space-y-5">
             <CargoInfoCard
-              artifact={activeArtifact}
+              artifact={displayArtifact}
               selectedPlacementId={selectedPlacementId}
             />
 
@@ -173,7 +291,7 @@ const Cargo3DPage: React.FC = () => {
           </Text>
         </div>
         <div className="flex flex-wrap gap-2">
-          {activeArtifact.data.placements.map((placement) => {
+          {displayArtifact.data.placements.map((placement) => {
             const cargo = cargoInfoById.get(placement.cargoId);
 
             return (

@@ -1,4 +1,5 @@
-import { Canvas } from "@react-three/fiber";
+import { useRef, useState, type ElementRef } from "react";
+import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import {
   Bounds,
   Edges,
@@ -9,7 +10,18 @@ import * as THREE from "three";
 import type {
   CargoLayoutArtifact,
   CargoPlacement,
+  CargoPosition,
 } from "../../api/protocol";
+import {
+  clampPositionToContainer,
+  findCollidingPlacement,
+  getBoxSize,
+  getPlacementBoxSize,
+  normalizeRotationY,
+  roundPosition,
+  type DragBlockDetail,
+  type EditableCargoPlacement,
+} from "./cargoLayoutMath";
 
 interface CargoLayoutCanvasProps {
   artifact: CargoLayoutArtifact;
@@ -17,33 +29,175 @@ interface CargoLayoutCanvasProps {
   interactive?: boolean;
   selectedPlacementId?: string | null;
   onPlacementSelect?: (placement: CargoPlacement) => void;
+  onPlacementMove?: (placementId: string, position: CargoPosition) => void;
+  onPlacementMoveBlocked?: (detail: DragBlockDetail) => void;
 }
+
+interface DragState {
+  placementId: string;
+  pointerId: number;
+  plane: THREE.Plane;
+  offset: THREE.Vector3;
+  startClientY: number;
+  startPosition: CargoPosition;
+}
+
+const LIFT_METERS_PER_PIXEL = 0.025;
+
+const stopCameraControlEvent = (event: ThreeEvent<PointerEvent>) => {
+  event.stopPropagation();
+  event.nativeEvent.preventDefault();
+  event.nativeEvent.stopPropagation();
+  event.nativeEvent.stopImmediatePropagation();
+};
 
 const CargoLayoutScene = ({
   artifact,
   interactive = false,
   selectedPlacementId,
   onPlacementSelect,
+  onPlacementMove,
+  onPlacementMoveBlocked,
+  onDragStateChange,
 }: {
   artifact: CargoLayoutArtifact;
   interactive?: boolean;
   selectedPlacementId?: string | null;
   onPlacementSelect?: (placement: CargoPlacement) => void;
+  onPlacementMove?: (placementId: string, position: CargoPosition) => void;
+  onPlacementMoveBlocked?: (detail: DragBlockDetail) => void;
+  onDragStateChange?: (dragging: boolean) => void;
 }) => {
   const { container, cargoSpecs, placements } = artifact.data;
+  const editablePlacements = placements as EditableCargoPlacement[];
   const { w, h, d } = container.size;
-  const getBoxSize = (cargoId: string) => {
-    const spec = cargoSpecs[cargoId];
+  const dragStateRef = useRef<DragState | null>(null);
+  const dragPointRef = useRef(new THREE.Vector3());
+  const dragWorldPositionRef = useRef(new THREE.Vector3());
+  const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(
+    null,
+  );
 
-    if (!spec) {
-      return [0.4, 0.4, 0.4] as const;
+  const finishDrag = (event: ThreeEvent<PointerEvent>) => {
+    const dragState = dragStateRef.current;
+
+    if (!dragState) {
+      return;
     }
 
-    return [
-      Math.max(spec.dimensions.w, 0.1),
-      Math.max(spec.dimensions.h, 0.1),
-      Math.max(spec.dimensions.d, 0.1),
-    ] as const;
+    stopCameraControlEvent(event);
+    (event.target as Element).releasePointerCapture?.(dragState.pointerId);
+    dragStateRef.current = null;
+    setDraggingPlacementId(null);
+    onDragStateChange?.(false);
+  };
+
+  const startDrag = (
+    event: ThreeEvent<PointerEvent>,
+    placement: CargoPlacement,
+  ) => {
+    stopCameraControlEvent(event);
+    onPlacementSelect?.(placement);
+
+    if (!interactive || !onPlacementMove) {
+      return;
+    }
+
+    event.object.getWorldPosition(dragWorldPositionRef.current);
+    const plane = new THREE.Plane(
+      new THREE.Vector3(0, 1, 0),
+      -dragWorldPositionRef.current.y,
+    );
+    const hitPoint = event.ray.intersectPlane(plane, dragPointRef.current);
+
+    if (!hitPoint) {
+      return;
+    }
+
+    (event.target as Element).setPointerCapture?.(event.pointerId);
+    dragStateRef.current = {
+      placementId: placement.id,
+      pointerId: event.pointerId,
+      plane,
+      offset: new THREE.Vector3(
+        placement.position.x - hitPoint.x,
+        0,
+        placement.position.z - hitPoint.z,
+      ),
+      startClientY: event.clientY,
+      startPosition: placement.position,
+    };
+    setDraggingPlacementId(placement.id);
+    onDragStateChange?.(true);
+  };
+
+  const movePlacement = (
+    event: ThreeEvent<PointerEvent>,
+    placement: CargoPlacement,
+  ) => {
+    const dragState = dragStateRef.current;
+
+    if (!dragState || dragState.placementId !== placement.id) {
+      return;
+    }
+
+    stopCameraControlEvent(event);
+
+    const hitPoint = event.ray.intersectPlane(
+      dragState.plane,
+      dragPointRef.current,
+    );
+
+    const editablePlacement = placement as EditableCargoPlacement;
+    const movingSize = getPlacementBoxSize(editablePlacement, cargoSpecs);
+    let rawPosition: CargoPosition;
+
+    if (event.shiftKey) {
+      rawPosition = {
+        x: placement.position.x,
+        y:
+          dragState.startPosition.y -
+          (event.clientY - dragState.startClientY) * LIFT_METERS_PER_PIXEL,
+        z: placement.position.z,
+      };
+    } else {
+      if (!hitPoint) {
+        return;
+      }
+
+      rawPosition = {
+        x: hitPoint.x + dragState.offset.x,
+        y: placement.position.y,
+        z: hitPoint.z + dragState.offset.z,
+      };
+    }
+
+    const { position: boundedPosition, constrained } =
+      clampPositionToContainer(rawPosition, movingSize, container.size);
+    const collidingPlacement = findCollidingPlacement(
+      editablePlacement,
+      boundedPosition,
+      editablePlacements,
+      cargoSpecs,
+    );
+
+    if (collidingPlacement) {
+      onPlacementMoveBlocked?.({
+        placementId: placement.id,
+        reason: "collision",
+        collidingPlacementId: collidingPlacement.id,
+      });
+      return;
+    }
+
+    onPlacementMove?.(placement.id, roundPosition(boundedPosition));
+
+    if (constrained) {
+      onPlacementMoveBlocked?.({
+        placementId: placement.id,
+        reason: "boundary",
+      });
+    }
   };
 
   return (
@@ -98,9 +252,11 @@ const CargoLayoutScene = ({
         <Edges scale={1} color="#0284c7" />
       </mesh>
 
-      {placements.map((placement) => {
-        const selected = placement.id === selectedPlacementId;
-        const [boxW, boxH, boxD] = getBoxSize(placement.cargoId);
+      {editablePlacements.map((placement) => {
+        const selected =
+          placement.id === selectedPlacementId ||
+          placement.id === draggingPlacementId;
+        const boxSize = getBoxSize(placement.cargoId, cargoSpecs);
 
         return (
           <mesh
@@ -110,16 +266,21 @@ const CargoLayoutScene = ({
               placement.position.y,
               placement.position.z,
             ]}
+            rotation={[0, normalizeRotationY(placement.rotationY), 0]}
             onPointerDown={
-              interactive
-                ? (event) => {
-                    event.stopPropagation();
-                    onPlacementSelect?.(placement);
-                  }
-                : undefined
+              interactive ? (event) => startDrag(event, placement) : undefined
+            }
+            onPointerMove={
+              interactive ? (event) => movePlacement(event, placement) : undefined
+            }
+            onPointerUp={
+              interactive ? (event) => finishDrag(event) : undefined
+            }
+            onPointerCancel={
+              interactive ? (event) => finishDrag(event) : undefined
             }
           >
-            <boxGeometry args={[boxW, boxH, boxD]} />
+            <boxGeometry args={[boxSize.w, boxSize.h, boxSize.d]} />
             <meshStandardMaterial
               color={placement.color}
               roughness={0.72}
@@ -145,10 +306,21 @@ const CargoLayoutCanvas = ({
   interactive = false,
   selectedPlacementId = null,
   onPlacementSelect,
+  onPlacementMove,
+  onPlacementMoveBlocked,
 }: CargoLayoutCanvasProps) => {
   const containerHeight = artifact.data.container.size.h;
   const floorY = -(containerHeight / 2) - 0.02;
   const sceneVerticalOffset = compact ? 0.7 : 1.25;
+  const [isDragging, setIsDragging] = useState(false);
+  const controlsRef = useRef<ElementRef<typeof OrbitControls> | null>(null);
+  const setDragging = (dragging: boolean) => {
+    setIsDragging(dragging);
+
+    if (controlsRef.current) {
+      controlsRef.current.enabled = !dragging;
+    }
+  };
 
   return (
     <div
@@ -176,18 +348,23 @@ const CargoLayoutCanvas = ({
           args={[28, 28, "#cbd5e1", "#e2e8f0"]}
           position={[0, floorY + sceneVerticalOffset, 0]}
         />
-        <Bounds fit clip observe margin={compact ? 1.15 : 1.25}>
+        <Bounds key={artifact.id} fit clip margin={compact ? 1.15 : 1.25}>
           <group position={[0, sceneVerticalOffset, 0]}>
             <CargoLayoutScene
               artifact={artifact}
               interactive={interactive}
               selectedPlacementId={selectedPlacementId}
               onPlacementSelect={onPlacementSelect}
+              onPlacementMove={onPlacementMove}
+              onPlacementMoveBlocked={onPlacementMoveBlocked}
+              onDragStateChange={setDragging}
             />
           </group>
         </Bounds>
         <OrbitControls
+          ref={controlsRef}
           makeDefault
+          enabled={!isDragging}
           enableDamping
           dampingFactor={0.05}
           minDistance={12}
