@@ -79,7 +79,7 @@ const CargoInfoCard = ({
         <div>
           <div className={fieldLabelClassName}>体积</div>
           <div className="mt-1 font-medium text-slate-900">
-            {item.volumeCbm.toFixed(3)} cbm
+            {formatDecimal(item.volumeCbm, 3)} cbm
           </div>
         </div>
         <div>

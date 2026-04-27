@@ -5,9 +5,14 @@ import {
   OrbitControls,
   PerspectiveCamera,
 } from "@react-three/drei";
+import Decimal from "decimal.js";
 import * as THREE from "three";
 import type { CargoPlacement } from "../../api/protocol";
-import type { CargoLayoutView } from "./cargoPackingView";
+import {
+  decimalMaxNumber,
+  toDecimalNumber,
+  type CargoLayoutView,
+} from "./cargoPackingView";
 
 interface CargoLayoutCanvasProps {
   artifact: CargoLayoutView;
@@ -25,9 +30,9 @@ const getBoxSize = (artifact: CargoLayoutView, cargoId: string) => {
   }
 
   return [
-    Math.max(spec.dimensions.w, 0.1),
-    Math.max(spec.dimensions.h, 0.1),
-    Math.max(spec.dimensions.d, 0.1),
+    decimalMaxNumber(spec.dimensions.w, 0.1),
+    decimalMaxNumber(spec.dimensions.h, 0.1),
+    decimalMaxNumber(spec.dimensions.d, 0.1),
   ] as const;
 };
 
@@ -39,28 +44,52 @@ const getCameraConfig = (
   sceneVerticalOffset: number,
 ) => {
   const { w, h, d } = artifact.container.size;
+  const fovRadians = toDecimalNumber(
+    new Decimal(CAMERA_FOV_DEG).mul(Math.PI).div(180),
+  );
+  const angleRadians = toDecimalNumber(
+    new Decimal(VIEW_ANGLE_DEG).mul(Math.PI).div(180),
+  );
+  const radius = toDecimalNumber(
+    new Decimal(w)
+      .pow(2)
+      .plus(new Decimal(h).pow(2))
+      .plus(new Decimal(d).pow(2))
+      .sqrt()
+      .div(2),
+  );
+  const distance = decimalMaxNumber(
+    new Decimal(radius)
+      .div(Math.sin(toDecimalNumber(new Decimal(fovRadians).div(2))))
+      .mul(1.18),
+    10,
+  );
+  const horizontalDistance = toDecimalNumber(
+    new Decimal(distance).mul(Math.cos(angleRadians)),
+  );
+  const cameraHeight = toDecimalNumber(
+    new Decimal(distance).mul(Math.sin(angleRadians)),
+  );
+  const diagonalDistance = toDecimalNumber(
+    new Decimal(horizontalDistance).div(Math.SQRT2),
+  );
   const target: [number, number, number] = [
     0,
-    sceneVerticalOffset + h * 0.08,
+    toDecimalNumber(
+      new Decimal(sceneVerticalOffset).plus(new Decimal(h).mul(0.08)),
+    ),
     0,
   ];
-  const radius = Math.sqrt(w ** 2 + h ** 2 + d ** 2) / 2;
-  const fovRadians = THREE.MathUtils.degToRad(CAMERA_FOV_DEG);
-  const distance = Math.max(radius / Math.sin(fovRadians / 2) * 1.18, 10);
-  const angleRadians = THREE.MathUtils.degToRad(VIEW_ANGLE_DEG);
-  const horizontalDistance = distance * Math.cos(angleRadians);
-  const cameraHeight = distance * Math.sin(angleRadians);
-  const diagonalDistance = horizontalDistance / Math.SQRT2;
   const position: [number, number, number] = [
     diagonalDistance,
-    target[1] + cameraHeight,
+    toDecimalNumber(new Decimal(target[1]).plus(cameraHeight)),
     diagonalDistance,
   ];
 
   return {
     position,
     target,
-    maxDistance: Math.max(distance * 2.5, 24),
+    maxDistance: decimalMaxNumber(new Decimal(distance).mul(2.5), 24),
   };
 };
 
@@ -112,7 +141,13 @@ const CargoLayoutScene = ({
   return (
     <group>
       <mesh>
-        <boxGeometry args={[w + 0.02, h + 0.02, d + 0.02]} />
+        <boxGeometry
+          args={[
+            toDecimalNumber(new Decimal(w).plus(0.02)),
+            toDecimalNumber(new Decimal(h).plus(0.02)),
+            toDecimalNumber(new Decimal(d).plus(0.02)),
+          ]}
+        />
         <meshStandardMaterial
           attach="material-0"
           color="#38bdf8"
@@ -210,7 +245,12 @@ const CargoLayoutCanvas = ({
   onPlacementSelect,
 }: CargoLayoutCanvasProps) => {
   const containerHeight = artifact.container.size.h;
-  const floorY = -(containerHeight / 2) - 0.02;
+  const floorY = toDecimalNumber(
+    new Decimal(containerHeight)
+      .div(2)
+      .negated()
+      .minus(0.02),
+  );
   const sceneVerticalOffset = compact ? 0.7 : 1.25;
   const cameraConfig = useMemo(
     () => getCameraConfig(artifact, sceneVerticalOffset),
@@ -242,7 +282,11 @@ const CargoLayoutCanvas = ({
         <directionalLight position={[-10, 6, -4]} intensity={0.5} />
         <gridHelper
           args={[28, 28, "#cbd5e1", "#e2e8f0"]}
-          position={[0, floorY + sceneVerticalOffset, 0]}
+          position={[
+            0,
+            toDecimalNumber(new Decimal(floorY).plus(sceneVerticalOffset)),
+            0,
+          ]}
         />
         <group position={[0, sceneVerticalOffset, 0]}>
           <CargoLayoutScene

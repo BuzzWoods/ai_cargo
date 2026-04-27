@@ -52,10 +52,24 @@ export const toDecimalNumber = (
 export const formatDecimal = (value: number, decimalPlaces = 3) =>
   new Decimal(value).toDecimalPlaces(decimalPlaces).toString();
 
-export const formatPercent = (value: number) => {
-  const normalized = value > 1 ? value : value * 100;
+export const decimalMaxNumber = (
+  firstValue: number | string | Decimal,
+  ...values: Array<number | string | Decimal>
+) =>
+  values
+    .reduce<Decimal>(
+      (maxValue, value) => Decimal.max(maxValue, new Decimal(value)),
+      new Decimal(firstValue),
+    )
+    .toNumber();
 
-  return `${normalized.toFixed(0)}%`;
+export const formatPercent = (value: number) => {
+  const decimalValue = new Decimal(value);
+  const normalized = decimalValue.gt(1)
+    ? decimalValue
+    : decimalValue.mul(100);
+
+  return `${normalized.toDecimalPlaces(0).toString()}%`;
 };
 
 export const isCargoPackingPlansArtifact = (
