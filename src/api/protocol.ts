@@ -72,27 +72,77 @@ export interface CargoPlacement {
   color: string;
   meta?: {
     note?: string;
+    item?: CargoPackingItem;
   };
 }
 
-export interface CargoLayoutArtifactData {
-  container: CargoContainer;
-  cargoBasicInfos: CargoBasicInfo[];
-  cargoSpecs: Record<string, CargoSpec>;
-  placements: CargoPlacement[];
+export interface CargoPackingItem {
+  boxId: string;
+  skuCode: string;
+  skuName: string;
+  factoryCode: string;
+  warehouseCode: string;
+  x: number;
+  y: number;
+  z: number;
+  length: number;
+  width: number;
+  height: number;
+  rotateType: number;
+  volumeCbm: number;
+  weightKg: number;
+  cartonCount: number;
+}
+
+export interface CargoPackingContainer {
+  containerNo: string;
+  containerType: string;
+  innerLength: number;
+  innerWidth: number;
+  innerHeight: number;
+  totalVolumeCbm: number;
+  totalWeightKg: number;
+  volumeUtilization: number;
+  weightUtilization: number;
+  items: CargoPackingItem[];
+}
+
+export interface CargoPackingRisk {
+  riskCode: string;
+  level: string;
+  targetType: string;
+  targetId: string;
+  message: string;
+}
+
+export interface CargoPackingPlan {
+  planNo: string;
+  strategyCode: string;
+  recommended: boolean;
   summary: {
-    totalItems: number;
-    fillRate: number;
-    notes: string[];
+    containerCount: number;
+    containerMix: string;
+    totalVolumeCbm: number;
+    totalWeightKg: number;
+    avgVolumeUtilization: number;
+    avgWeightUtilization: number;
+    totalScore: number;
   };
+  containers: CargoPackingContainer[];
+  risks: CargoPackingRisk[];
 }
 
-export interface CargoLayoutArtifact {
+export interface CargoPackingPlansArtifactData {
+  recommendedPlanNo: string;
+  plans: CargoPackingPlan[];
+}
+
+export interface CargoPackingPlansArtifact {
   id: string;
-  kind: "cargo_layout";
+  kind: "cargo_packing_plans";
   version: "1.0.0";
   title: string;
-  data: CargoLayoutArtifactData;
+  data: CargoPackingPlansArtifactData;
 }
 
 export interface ChatInputFileRef {
@@ -109,7 +159,7 @@ export interface ChatPostRequest {
   text: string;
   files?: ChatInputFileRef[];
   context?: {
-    bizType?: "cargo_layout";
+    bizType?: "cargo_packing_plans";
     mode?: "natural_language";
     hints?: Record<string, string | number | boolean | null>;
   };
@@ -133,7 +183,7 @@ export interface MarkdownDeltaPayload {
 }
 
 export interface ArtifactReplacePayload {
-  artifact: CargoLayoutArtifact;
+  artifact: CargoPackingPlansArtifact;
 }
 
 export interface MessageDonePayload {
@@ -176,7 +226,7 @@ export interface AssistantMessageViewModel {
   role: "assistant";
   status: MessageStatus;
   markdownText: string;
-  artifacts: Record<string, CargoLayoutArtifact>;
+  artifacts: Record<string, CargoPackingPlansArtifact>;
   startedAt?: string;
   finishedAt?: string;
   error?: string;

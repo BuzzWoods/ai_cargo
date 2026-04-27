@@ -143,7 +143,7 @@ export const sendChatMessage = async ({
       text,
       ...(files?.length ? { files } : {}),
       context: {
-        bizType: "cargo_layout",
+        bizType: "cargo_packing_plans",
         mode: "natural_language",
         hints: {
           expectedOutput: "markdown_and_3d_artifact",

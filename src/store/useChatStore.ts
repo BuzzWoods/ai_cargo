@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type {
-  CargoLayoutArtifact,
+  CargoPackingPlansArtifact,
   MessageStatus,
 } from "../api/protocol";
 
@@ -49,7 +49,7 @@ export interface AssistantMessage {
   role: "assistant";
   status: MessageStatus;
   markdownText: string;
-  artifacts: Record<string, CargoLayoutArtifact>;
+  artifacts: Record<string, CargoPackingPlansArtifact>;
   timestamp: number;
   serverRequestId?: string;
   serverMessageId?: string;
@@ -84,7 +84,10 @@ interface ChatState {
     },
   ) => void;
   appendAssistantMarkdown: (id: string, delta: string) => void;
-  replaceAssistantArtifact: (id: string, artifact: CargoLayoutArtifact) => void;
+  replaceAssistantArtifact: (
+    id: string,
+    artifact: CargoPackingPlansArtifact,
+  ) => void;
   completeAssistantMessage: (id: string, finishedAt?: string) => void;
   failAssistantMessage: (id: string, error: string) => void;
   cancelAssistantMessage: (id: string) => void;
