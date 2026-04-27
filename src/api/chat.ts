@@ -40,7 +40,7 @@ const streamEventTypes: StreamEventType[] = [
   "heartbeat",
 ];
 
-const DEFAULT_CHAT_API_BASE_URL = "http://127.0.0.1:5174";
+const DEFAULT_CHAT_API_BASE_URL = "http://192.168.110.64:9411";
 const chatApiBaseUrl = (
   import.meta.env.VITE_CHAT_API_BASE_URL ?? DEFAULT_CHAT_API_BASE_URL
 ).replace(/\/+$/, "");
@@ -48,7 +48,9 @@ const chatApiBaseUrl = (
 const createApiUrl = (pathOrUrl: string) =>
   new URL(pathOrUrl, `${chatApiBaseUrl}/`).toString();
 
-const isKnownStreamEvent = (value: unknown): value is ParsedStreamEventShape => {
+const isKnownStreamEvent = (
+  value: unknown,
+): value is ParsedStreamEventShape => {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -86,6 +88,16 @@ const isAcceptedResponse = (
   );
 };
 
+const unwrapApiResponseData = (value: unknown) => {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return "data" in record ? record.data : value;
+};
+
 const getResponseErrorMessage = async (response: Response) => {
   const text = await response.text();
 
@@ -94,8 +106,13 @@ const getResponseErrorMessage = async (response: Response) => {
   }
 
   try {
-    const parsed = JSON.parse(text) as { message?: string; error?: string };
-    return parsed.message ?? parsed.error ?? text;
+    const parsed = JSON.parse(text) as {
+      message?: string;
+      error?: string;
+      msg?: string;
+      code?: string;
+    };
+    return parsed.message ?? parsed.error ?? parsed.msg ?? parsed.code ?? text;
   } catch {
     return text;
   }
@@ -119,7 +136,7 @@ const postChatMessage = async (
     throw new Error(`发送消息失败: ${await getResponseErrorMessage(response)}`);
   }
 
-  const data = (await response.json()) as unknown;
+  const data = unwrapApiResponseData((await response.json()) as unknown);
   if (!isAcceptedResponse(data)) {
     throw new Error("后端 accepted 响应格式不正确");
   }
@@ -143,11 +160,9 @@ export const sendChatMessage = async ({
       text,
       ...(files?.length ? { files } : {}),
       context: {
-        bizType: "cargo_packing_plans",
-        mode: "natural_language",
-        hints: {
-          expectedOutput: "markdown_and_3d_artifact",
-        },
+        bizType: "cargo_packing",
+        mode: "new_plan",
+        hints: {},
       },
     },
     signal,
@@ -168,7 +183,9 @@ export const sendChatMessage = async ({
     },
     async onopen(response) {
       if (!response.ok) {
-        throw new Error(`SSE 连接失败: ${await getResponseErrorMessage(response)}`);
+        throw new Error(
+          `SSE 连接失败: ${await getResponseErrorMessage(response)}`,
+        );
       }
 
       const contentType = response.headers.get("content-type");
@@ -192,10 +209,7 @@ export const sendChatMessage = async ({
 
       // 页面切后台再回来时，fetch-event-source 可能触发重连。
       // 这里按 eventId / seq 去重，避免旧 delta 再次 append。
-      if (
-        seenEventIds.has(parsed.eventId) ||
-        parsed.seq <= latestSeq
-      ) {
+      if (seenEventIds.has(parsed.eventId) || parsed.seq <= latestSeq) {
         return;
       }
 

@@ -149,7 +149,7 @@ export interface ChatInputFileRef {
   fileId?: string;
   fileName: string;
   mimeType?: string;
-  source?: "upload" | "workspace" | "remote";
+  source?: "upload" | "feishu" | "oss" | "workspace" | "remote";
   uri?: string;
 }
 
@@ -159,8 +159,8 @@ export interface ChatPostRequest {
   text: string;
   files?: ChatInputFileRef[];
   context?: {
-    bizType?: "cargo_packing_plans";
-    mode?: "natural_language";
+    bizType?: "cargo_packing";
+    mode?: "new_plan" | "adjust_plan";
     hints?: Record<string, string | number | boolean | null>;
   };
 }
