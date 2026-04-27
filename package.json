@@ -17,6 +17,7 @@
     "@react-three/fiber": "^9.6.0",
     "ahooks": "^3.8.1",
     "antd": "^6.3.5",
+    "decimal.js": "^10.6.0",
     "lucide-react": "^0.454.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import type {
   CargoContainer,
   CargoPackingContainer,
@@ -41,6 +42,15 @@ const hashString = (value: string) => {
 
 const getItemColor = (item: CargoPackingItem) =>
   palette[hashString(item.skuCode || item.boxId) % palette.length];
+
+export const toDecimalNumber = (
+  value: number | string | Decimal,
+  decimalPlaces = 6,
+) =>
+  new Decimal(value).toDecimalPlaces(decimalPlaces).toNumber();
+
+export const formatDecimal = (value: number, decimalPlaces = 3) =>
+  new Decimal(value).toDecimalPlaces(decimalPlaces).toString();
 
 export const formatPercent = (value: number) => {
   const normalized = value > 1 ? value : value * 100;
@@ -95,18 +105,30 @@ export const createCargoLayoutView = (
     ]),
   );
   const placements = packingContainer.items.map((item) => ({
-      id: item.boxId,
-      cargoId: item.boxId,
-      position: {
-        x: item.x - packingContainer.innerLength / 2 + item.length / 2,
-        y: item.z - packingContainer.innerHeight / 2 + item.height / 2,
-        z: item.y - packingContainer.innerWidth / 2 + item.width / 2,
-      },
-      color: getItemColor(item),
-      meta: {
-        item,
-      },
-    }));
+    id: item.boxId,
+    cargoId: item.boxId,
+    position: {
+      x: toDecimalNumber(
+        new Decimal(item.x)
+          .minus(new Decimal(packingContainer.innerLength).div(2))
+          .plus(new Decimal(item.length).div(2)),
+      ),
+      y: toDecimalNumber(
+        new Decimal(item.z)
+          .minus(new Decimal(packingContainer.innerHeight).div(2))
+          .plus(new Decimal(item.height).div(2)),
+      ),
+      z: toDecimalNumber(
+        new Decimal(item.y)
+          .minus(new Decimal(packingContainer.innerWidth).div(2))
+          .plus(new Decimal(item.width).div(2)),
+      ),
+    },
+    color: getItemColor(item),
+    meta: {
+      item,
+    },
+  }));
 
   return {
     id: `${artifact.id}:${plan.planNo}:${packingContainer.containerNo}`,

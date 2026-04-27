@@ -1,5 +1,5 @@
 import { Tag, Typography } from "antd";
-import type { CargoLayoutView } from "./cargoPackingView";
+import { formatDecimal, type CargoLayoutView } from "./cargoPackingView";
 
 const { Text } = Typography;
 
@@ -10,6 +10,9 @@ interface CargoInfoCardProps {
 
 const fieldLabelClassName =
   "text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+
+const formatPoint = (values: number[]) =>
+  values.map((value) => formatDecimal(value, 3)).join(", ");
 
 const CargoInfoCard = ({
   layoutView,
@@ -99,7 +102,7 @@ const CargoInfoCard = ({
             后端坐标
           </Text>
           <div className="mt-1 font-medium text-slate-900">
-            {item.x}, {item.y}, {item.z}
+            {formatPoint([item.x, item.y, item.z])}
           </div>
         </div>
         <div>
@@ -107,8 +110,11 @@ const CargoInfoCard = ({
             视图中心点
           </Text>
           <div className="mt-1 font-medium text-slate-900">
-            {placement.position.x}, {placement.position.y},{" "}
-            {placement.position.z}
+            {formatPoint([
+              placement.position.x,
+              placement.position.y,
+              placement.position.z,
+            ])}
           </div>
         </div>
       </div>
