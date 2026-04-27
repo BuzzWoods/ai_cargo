@@ -44,6 +44,7 @@ const DEFAULT_CHAT_API_BASE_URL = "http://192.168.110.64:9411";
 const chatApiBaseUrl = (
   import.meta.env.VITE_CHAT_API_BASE_URL ?? DEFAULT_CHAT_API_BASE_URL
 ).replace(/\/+$/, "");
+const enableSseDebug = import.meta.env.DEV;
 
 const createApiUrl = (pathOrUrl: string) =>
   new URL(pathOrUrl, `${chatApiBaseUrl}/`).toString();
@@ -144,6 +145,22 @@ const postChatMessage = async (
   return data;
 };
 
+const logSseEvent = (event: ChatStreamEvent) => {
+  if (!enableSseDebug) {
+    return;
+  }
+
+  console.debug("[SSE event]", {
+    type: event.type,
+    seq: event.seq,
+    eventId: event.eventId,
+    conversationId: event.conversationId,
+    requestId: event.requestId,
+    messageId: event.messageId,
+    payload: event.payload,
+  });
+};
+
 export const sendChatMessage = async ({
   serverConversationId,
   clientMessageId,
@@ -220,7 +237,9 @@ export const sendChatMessage = async ({
         sawTerminalEvent = true;
       }
 
-      onEvent(parsed as unknown as ChatStreamEvent);
+      const streamEvent = parsed as unknown as ChatStreamEvent;
+      logSseEvent(streamEvent);
+      onEvent(streamEvent);
     },
     onclose() {
       if (!signal?.aborted && !sawTerminalEvent) {

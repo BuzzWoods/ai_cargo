@@ -178,6 +178,10 @@ const AgentChat: React.FC = () => {
           }
 
           if (event.type === "artifact.replace") {
+            if (!event.payload.artifact) {
+              return;
+            }
+
             replaceAssistantArtifact(
               localAssistantMessageId,
               event.payload.artifact,

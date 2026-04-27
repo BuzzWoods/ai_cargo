@@ -58,20 +58,39 @@ export const formatPercent = (value: number) => {
   return `${normalized.toFixed(0)}%`;
 };
 
-export const getPreferredPlan = (artifact: CargoPackingPlansArtifact) =>
-  artifact.data.plans.find(
+export const isCargoPackingPlansArtifact = (
+  artifact: CargoPackingPlansArtifact | null | undefined,
+): artifact is CargoPackingPlansArtifact =>
+  Array.isArray(artifact?.data?.plans);
+
+export const getPreferredPlan = (
+  artifact: CargoPackingPlansArtifact | null | undefined,
+) => {
+  if (!isCargoPackingPlansArtifact(artifact)) {
+    return null;
+  }
+
+  return artifact.data.plans.find(
     (plan) =>
       plan.recommended || plan.planNo === artifact.data.recommendedPlanNo,
   ) ??
-  artifact.data.plans[0] ??
-  null;
+    artifact.data.plans[0] ??
+    null;
+};
 
 export const getPlanByNo = (
-  artifact: CargoPackingPlansArtifact,
+  artifact: CargoPackingPlansArtifact | null | undefined,
   planNo: string | null,
-) =>
-  artifact.data.plans.find((plan) => plan.planNo === planNo) ??
-  getPreferredPlan(artifact);
+) => {
+  if (!isCargoPackingPlansArtifact(artifact)) {
+    return null;
+  }
+
+  return (
+    artifact.data.plans.find((plan) => plan.planNo === planNo) ??
+    getPreferredPlan(artifact)
+  );
+};
 
 export const getContainerByNo = (
   plan: CargoPackingPlan | null,
@@ -86,7 +105,7 @@ export const createCargoLayoutView = (
   plan: CargoPackingPlan | null,
   packingContainer: CargoPackingContainer | null,
 ): CargoLayoutView | null => {
-  if (!artifact || !plan || !packingContainer) {
+  if (!isCargoPackingPlansArtifact(artifact) || !plan || !packingContainer) {
     return null;
   }
 
