@@ -5,11 +5,13 @@ import {
   DeleteOutlined,
   LoadingOutlined,
   MoreOutlined,
+  ProfileOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { Dropdown, type MenuProps } from "antd";
 import { sendChatMessage } from "../../api/chat";
 import AssistantMessageContent from "../../components/chat/AssistantMessageContent";
+import ShipmentBatchSelectorModal from "../../components/chat/ShipmentBatchSelectorModal";
 import type { AssistantMessage } from "../../store/useChatStore";
 import { useChatStore } from "../../store/useChatStore";
 
@@ -31,6 +33,7 @@ const AgentChat: React.FC = () => {
   const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
   const {
     serverConversationId,
     messages,
@@ -96,6 +99,21 @@ const AgentChat: React.FC = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     clearHistory();
+  };
+
+  const handleAppendShipmentBatchNos = (batchPlanNos: string[]) => {
+    if (!batchPlanNos.length) {
+      return;
+    }
+
+    const appendedText = `出货批次编号：${batchPlanNos.join("、")}`;
+
+    setInputValue((current) =>
+      current.trim()
+        ? `${current.trimEnd()}\n${appendedText}`
+        : appendedText,
+    );
+    setBatchSelectorOpen(false);
   };
 
   const onSend = async (content: string) => {
@@ -285,9 +303,17 @@ const AgentChat: React.FC = () => {
         placeholder="描述您的装箱需求，例如：100个纸箱如何装进 20GP 集装箱？"
         loading={isStreaming}
         prefix={
-          <Dropdown menu={{ items }} placement="topLeft">
-            <Button type="text" icon={<MoreOutlined />} />
-          </Dropdown>
+          <div className="flex items-center gap-1">
+            <Button
+              type="text"
+              icon={<ProfileOutlined />}
+              title="选择业务单号"
+              onClick={() => setBatchSelectorOpen(true)}
+            />
+            <Dropdown menu={{ items }} placement="topLeft">
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </div>
         }
       />
     );
@@ -352,6 +378,11 @@ const AgentChat: React.FC = () => {
           }`}
         />
       </div>
+      <ShipmentBatchSelectorModal
+        open={batchSelectorOpen}
+        onCancel={() => setBatchSelectorOpen(false)}
+        onConfirm={handleAppendShipmentBatchNos}
+      />
     </div>
   );
 };

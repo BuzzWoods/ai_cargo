@@ -167,7 +167,7 @@ const Cargo3DPreviewPage: React.FC = () => {
             'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
         }}
       />
-      {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Text type="secondary" className="text-xs">
           支持完整 artifact、artifact.data，或 SSE artifact.replace 的 payload。

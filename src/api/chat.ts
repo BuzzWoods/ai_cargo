@@ -9,6 +9,11 @@ import type {
   ChatStreamEvent,
   StreamEventType,
 } from "./protocol";
+import {
+  createApiUrl,
+  getResponseErrorMessage,
+  unwrapApiResponseData,
+} from "./http";
 
 interface SendChatMessageOptions {
   serverConversationId: string | null;
@@ -40,14 +45,7 @@ const streamEventTypes: StreamEventType[] = [
   "heartbeat",
 ];
 
-const DEFAULT_CHAT_API_BASE_URL = "http://192.168.110.64:9411";
-const chatApiBaseUrl = (
-  import.meta.env.VITE_CHAT_API_BASE_URL ?? DEFAULT_CHAT_API_BASE_URL
-).replace(/\/+$/, "");
 const enableSseDebug = import.meta.env.DEV;
-
-const createApiUrl = (pathOrUrl: string) =>
-  new URL(pathOrUrl, `${chatApiBaseUrl}/`).toString();
 
 const isKnownStreamEvent = (
   value: unknown,
@@ -87,36 +85,6 @@ const isAcceptedResponse = (
     typeof record.requestId === "string" &&
     typeof record.sseChannel === "string"
   );
-};
-
-const unwrapApiResponseData = (value: unknown) => {
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return "data" in record ? record.data : value;
-};
-
-const getResponseErrorMessage = async (response: Response) => {
-  const text = await response.text();
-
-  if (!text) {
-    return `HTTP ${response.status}`;
-  }
-
-  try {
-    const parsed = JSON.parse(text) as {
-      message?: string;
-      error?: string;
-      msg?: string;
-      code?: string;
-    };
-    return parsed.message ?? parsed.error ?? parsed.msg ?? parsed.code ?? text;
-  } catch {
-    return text;
-  }
 };
 
 const postChatMessage = async (
