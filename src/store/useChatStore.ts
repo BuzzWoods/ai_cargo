@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   CargoPackingPlansArtifact,
   MessageStatus,
@@ -34,6 +35,10 @@ const createUuid = () => {
 };
 
 const createId = (prefix: string) => `${prefix}_${createUuid()}`;
+
+const CHAT_CACHE_STORAGE_KEY = "ai-cargo-chat-cache";
+const CHAT_CACHE_VERSION = 1;
+const MAX_CACHED_MESSAGES = 50;
 
 export interface UserMessage {
   id: string;
@@ -96,6 +101,58 @@ interface ChatState {
   clearHistory: () => void;
 }
 
+type CachedChatState = Pick<
+  ChatState,
+  "activeArtifactId" | "messages" | "serverConversationId"
+>;
+
+const isUnfinishedAssistantStatus = (status: MessageStatus) =>
+  status === "pending" || status === "accepted" || status === "streaming";
+
+const normalizeCachedMessages = (messages: ChatMessage[]) =>
+  messages.slice(-MAX_CACHED_MESSAGES).map((message) => {
+    if (message.role === "user") {
+      return message;
+    }
+
+    // 刷新页面后 SSE 连接已经丢失，恢复时不能继续显示“正在生成”。
+    if (isUnfinishedAssistantStatus(message.status)) {
+      return {
+        ...message,
+        status: "cancelled",
+        error: message.error ?? "页面刷新后已停止本次生成",
+      } satisfies AssistantMessage;
+    }
+
+    return {
+      ...message,
+      artifacts: message.artifacts ?? {},
+      markdownText: message.markdownText ?? "",
+    } satisfies AssistantMessage;
+  });
+
+const normalizeCachedChatState = (value: unknown): CachedChatState => {
+  const record =
+    value && typeof value === "object"
+      ? (value as Partial<CachedChatState>)
+      : {};
+  const messages = Array.isArray(record.messages)
+    ? normalizeCachedMessages(record.messages)
+    : [];
+
+  return {
+    activeArtifactId:
+      typeof record.activeArtifactId === "string"
+        ? record.activeArtifactId
+        : null,
+    messages,
+    serverConversationId:
+      typeof record.serverConversationId === "string"
+        ? record.serverConversationId
+        : null,
+  };
+};
+
 const updateAssistantMessage = (
   messages: ChatMessage[],
   id: string,
@@ -123,136 +180,153 @@ const updateUserMessage = (
     return updater(message);
   });
 
-export const useChatStore = create<ChatState>((set) => ({
-  serverConversationId: null,
-  activeArtifactId: null,
-  messages: [],
-  addUserMessage: (text) => {
-    // 用户消息先落本地，clientMessageId 会随 POST 发给后端做幂等/追踪。
-    const id = createId("local_user");
-    const clientMessageId = createId("client_msg");
-
-    set((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id,
-          clientMessageId,
-          role: "user",
-          text,
-          status: "done",
-          timestamp: Date.now(),
-        },
-      ],
-    }));
-
-    return { localId: id, clientMessageId };
-  },
-  addAssistantPlaceholder: () => {
-    // 发起请求后先插入一个空 assistant 气泡，后续 SSE delta/artifact 会填充它。
-    const id = createId("local_assistant");
-
-    set((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id,
-          role: "assistant",
-          status: "pending",
-          markdownText: "",
-          artifacts: {},
-          timestamp: Date.now(),
-        },
-      ],
-    }));
-
-    return id;
-  },
-  bindServerConversationId: (serverConversationId) =>
-    set({ serverConversationId }),
-  bindUserServerConversationId: (id, serverConversationId) => {
-    set((state) => ({
-      messages: updateUserMessage(state.messages, id, (message) => ({
-        ...message,
-        serverConversationId,
-      })),
-    }));
-  },
-  bindAssistantServerMeta: (id, meta) => {
-    set((state) => ({
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        serverRequestId:
-          meta.serverRequestId ?? message.serverRequestId,
-        serverMessageId: meta.serverMessageId ?? message.serverMessageId,
-        serverConversationId:
-          meta.serverConversationId ?? message.serverConversationId,
-        startedAt: meta.startedAt ?? message.startedAt,
-        status:
-          message.status === "done" || message.status === "error"
-            ? message.status
-            : "accepted",
-      })),
-    }));
-  },
-  appendAssistantMarkdown: (id, delta) => {
-    // markdown.delta 是增量文本，必须 append；SSE 去重在 api/chat.ts 做。
-    set((state) => ({
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        status: "streaming",
-        markdownText: `${message.markdownText}${delta}`,
-      })),
-    }));
-  },
-  replaceAssistantArtifact: (id, artifact) => {
-    // artifact.replace 表示同一个 artifact id 的 3D 结构可被后端不断刷新。
-    set((state) => ({
-      activeArtifactId: artifact.id,
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        status: "streaming",
-        artifacts: {
-          ...message.artifacts,
-          [artifact.id]: artifact,
-        },
-      })),
-    }));
-  },
-  completeAssistantMessage: (id, finishedAt) => {
-    set((state) => ({
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        status: "done",
-        finishedAt,
-      })),
-    }));
-  },
-  failAssistantMessage: (id, error) => {
-    set((state) => ({
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        status: "error",
-        error,
-      })),
-    }));
-  },
-  cancelAssistantMessage: (id) => {
-    set((state) => ({
-      messages: updateAssistantMessage(state.messages, id, (message) => ({
-        ...message,
-        status:
-          message.status === "done" || message.status === "error"
-            ? message.status
-            : "cancelled",
-      })),
-    }));
-  },
-  setActiveArtifactId: (artifactId) => set({ activeArtifactId: artifactId }),
-  clearHistory: () =>
-    set({
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set) => ({
       serverConversationId: null,
       activeArtifactId: null,
       messages: [],
+      addUserMessage: (text) => {
+        // 用户消息先落本地，clientMessageId 会随 POST 发给后端做幂等/追踪。
+        const id = createId("local_user");
+        const clientMessageId = createId("client_msg");
+
+        set((state) => ({
+          messages: [
+            ...state.messages,
+            {
+              id,
+              clientMessageId,
+              role: "user",
+              text,
+              status: "done",
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+
+        return { localId: id, clientMessageId };
+      },
+      addAssistantPlaceholder: () => {
+        // 发起请求后先插入一个空 assistant 气泡，后续 SSE delta/artifact 会填充它。
+        const id = createId("local_assistant");
+
+        set((state) => ({
+          messages: [
+            ...state.messages,
+            {
+              id,
+              role: "assistant",
+              status: "pending",
+              markdownText: "",
+              artifacts: {},
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+
+        return id;
+      },
+      bindServerConversationId: (serverConversationId) =>
+        set({ serverConversationId }),
+      bindUserServerConversationId: (id, serverConversationId) => {
+        set((state) => ({
+          messages: updateUserMessage(state.messages, id, (message) => ({
+            ...message,
+            serverConversationId,
+          })),
+        }));
+      },
+      bindAssistantServerMeta: (id, meta) => {
+        set((state) => ({
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            serverRequestId: meta.serverRequestId ?? message.serverRequestId,
+            serverMessageId: meta.serverMessageId ?? message.serverMessageId,
+            serverConversationId:
+              meta.serverConversationId ?? message.serverConversationId,
+            startedAt: meta.startedAt ?? message.startedAt,
+            status:
+              message.status === "done" || message.status === "error"
+                ? message.status
+                : "accepted",
+          })),
+        }));
+      },
+      appendAssistantMarkdown: (id, delta) => {
+        // markdown.delta 是增量文本，必须 append；SSE 去重在 api/chat.ts 做。
+        set((state) => ({
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            status: "streaming",
+            markdownText: `${message.markdownText}${delta}`,
+          })),
+        }));
+      },
+      replaceAssistantArtifact: (id, artifact) => {
+        // artifact.replace 表示同一个 artifact id 的 3D 结构可被后端不断刷新。
+        set((state) => ({
+          activeArtifactId: artifact.id,
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            status: "streaming",
+            artifacts: {
+              ...message.artifacts,
+              [artifact.id]: artifact,
+            },
+          })),
+        }));
+      },
+      completeAssistantMessage: (id, finishedAt) => {
+        set((state) => ({
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            status: "done",
+            finishedAt,
+          })),
+        }));
+      },
+      failAssistantMessage: (id, error) => {
+        set((state) => ({
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            status: "error",
+            error,
+          })),
+        }));
+      },
+      cancelAssistantMessage: (id) => {
+        set((state) => ({
+          messages: updateAssistantMessage(state.messages, id, (message) => ({
+            ...message,
+            status:
+              message.status === "done" || message.status === "error"
+                ? message.status
+                : "cancelled",
+          })),
+        }));
+      },
+      setActiveArtifactId: (artifactId) => set({ activeArtifactId: artifactId }),
+      clearHistory: () =>
+        set({
+          serverConversationId: null,
+          activeArtifactId: null,
+          messages: [],
+        }),
     }),
-}));
+    {
+      name: CHAT_CACHE_STORAGE_KEY,
+      version: CHAT_CACHE_VERSION,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state): CachedChatState => ({
+        activeArtifactId: state.activeArtifactId,
+        messages: normalizeCachedMessages(state.messages),
+        serverConversationId: state.serverConversationId,
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizeCachedChatState(persistedState),
+      }),
+    },
+  ),
+);
