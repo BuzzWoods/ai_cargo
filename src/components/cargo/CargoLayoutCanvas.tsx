@@ -39,6 +39,7 @@ const getBoxSize = (artifact: CargoLayoutView, cargoId: string) => {
 const VIEW_ANGLE_DEG = 40;
 const CAMERA_FOV_DEG = 40;
 
+// 根据当前集装箱尺寸计算初始相机位置，让不同箱型尽量都能完整进入视野。
 const getCameraConfig = (
   artifact: CargoLayoutView,
   sceneVerticalOffset: number,
@@ -103,6 +104,7 @@ const CargoCamera = ({
   const cameraRef = useRef<THREE.PerspectiveCamera>(null);
 
   useLayoutEffect(() => {
+    // useLayoutEffect 在绘制前同步相机，减少首次进入 3D 页面时的抖动。
     const camera = cameraRef.current;
 
     if (!camera) {
@@ -140,6 +142,7 @@ const CargoLayoutScene = ({
 
   return (
     <group>
+      {/* 集装箱外框：底面深色，其余面透明，方便看清内部货物堆叠。 */}
       <mesh>
         <boxGeometry
           args={[
@@ -197,6 +200,7 @@ const CargoLayoutScene = ({
       </mesh>
 
       {placements.map((placement) => {
+        // 每个 placement 对应一个箱体 mesh；点击 mesh 会同步右侧货物信息卡片。
         const selected = placement.id === selectedPlacementId;
         const [boxW, boxH, boxD] = getBoxSize(artifact, placement.cargoId);
 
@@ -244,6 +248,7 @@ const CargoLayoutCanvas = ({
   selectedPlacementId = null,
   onPlacementSelect,
 }: CargoLayoutCanvasProps) => {
+  // compact 用于聊天小卡片，完整页则撑满工作区并开启交互选择。
   const containerHeight = artifact.container.size.h;
   const floorY = toDecimalNumber(
     new Decimal(containerHeight)

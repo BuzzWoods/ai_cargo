@@ -19,6 +19,7 @@ const headingClassNames = {
 const MarkdownRenderer = ({ markdown }: MarkdownRendererProps) => (
   <div className="markdown-body text-[15px] leading-7 text-slate-700">
     <ReactMarkdown
+      // GFM 支持表格/任务列表；sanitize 防止后端 markdown 注入不安全 HTML。
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeSanitize]}
       components={{

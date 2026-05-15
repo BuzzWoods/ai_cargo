@@ -20,6 +20,7 @@ const AssistantMessageContent = ({
   message,
   onOpenArtifact,
 }: AssistantMessageContentProps) => {
+  // 一个 assistant 气泡可以同时包含 markdown 文本和一个或多个 3D artifact。
   const artifacts = Object.values(message.artifacts);
 
   return (
@@ -33,6 +34,7 @@ const AssistantMessageContent = ({
       )}
 
       {artifacts.map((artifact) => {
+        // 聊天页只做小预览：默认取推荐计划，没有推荐则取第一个计划/箱子。
         const plan = getPreferredPlan(artifact);
         const container = getContainerByNo(plan, null);
         const layoutView = createCargoLayoutView(artifact, plan, container);

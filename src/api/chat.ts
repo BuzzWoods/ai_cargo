@@ -47,6 +47,7 @@ const streamEventTypes: StreamEventType[] = [
 
 const enableSseDebug = import.meta.env.DEV;
 
+// SSE 是文本流，运行时仍要做结构校验，避免后端异常数据直接污染聊天状态。
 const isKnownStreamEvent = (
   value: unknown,
 ): value is ParsedStreamEventShape => {
@@ -70,6 +71,7 @@ const isKnownStreamEvent = (
   );
 };
 
+// HTTP 发消息只代表后端“接受任务”，真正的正文和 3D artifact 会从 SSE 继续回来。
 const isAcceptedResponse = (
   value: unknown,
 ): value is ChatPostAcceptedResponse => {
@@ -87,6 +89,7 @@ const isAcceptedResponse = (
   );
 };
 
+// 第一步：用 HTTP POST 把用户输入发给后端，拿到 conversation/request 和 SSE 通道。
 const postChatMessage = async (
   requestBody: ChatPostRequest,
   signal?: AbortSignal,
@@ -113,6 +116,7 @@ const postChatMessage = async (
   return data;
 };
 
+// 开发环境把每个 SSE 事件打到控制台，方便排查“页面有内容但 Network EventStream 看不到”的情况。
 const logSseEvent = (event: ChatStreamEvent) => {
   if (!enableSseDebug) {
     return;
@@ -138,6 +142,7 @@ export const sendChatMessage = async ({
   onAccepted,
   onEvent,
 }: SendChatMessageOptions): Promise<ChatPostAcceptedResponse> => {
+  // 第二步：POST 成功后，立刻建立 SSE GET 连接继续接收增量结果。
   const acceptedResponse = await postChatMessage(
     {
       conversationId: serverConversationId,
@@ -159,6 +164,7 @@ export const sendChatMessage = async ({
   const seenEventIds = new Set<string>();
   let latestSeq = 0;
 
+  // 第三步：SSE 连接生命周期都在这里处理，包括打开校验、消息解析、去重和异常关闭。
   await fetchEventSource(createApiUrl(acceptedResponse.sseChannel), {
     method: "GET",
     signal,

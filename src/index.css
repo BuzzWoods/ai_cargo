@@ -64,3 +64,84 @@ body {
 .ant-menu-vertical {
   border-inline-end: none !important;
 }
+
+.shipment-batch-selector-modal .ant-modal-content {
+  border-radius: 8px;
+  padding: 18px 24px 16px;
+}
+
+.shipment-batch-selector-modal .ant-modal-header {
+  margin-bottom: 10px;
+}
+
+.shipment-batch-selector-modal .ant-modal-body {
+  padding: 0;
+}
+
+.shipment-batch-selector-modal .ant-modal-footer {
+  margin-top: 12px;
+}
+
+.shipment-batch-selector-modal .ant-alert {
+  padding-block: 8px;
+}
+
+.shipment-batch-table .ant-table {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.shipment-batch-table .ant-table-container {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shipment-batch-table .ant-table-thead > tr > th {
+  border-bottom: 0;
+  background: #f8fafc;
+  padding: 9px 12px;
+  font-weight: 600;
+}
+
+.shipment-batch-table .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
+.shipment-batch-table .ant-table-tbody > tr > td {
+  border-bottom: 0;
+  padding: 9px 12px;
+}
+
+.shipment-batch-table .ant-table-tbody > tr.ant-table-placeholder > td {
+  padding: 18px 12px !important;
+}
+
+.shipment-batch-table .ant-empty-normal {
+  margin-block: 12px;
+}
+
+.shipment-batch-table .ant-empty-image {
+  height: 32px;
+  margin-bottom: 4px;
+}
+
+.shipment-batch-table .ant-empty-description {
+  font-size: 12px;
+}
+
+.shipment-batch-table .ant-table-expanded-row > .ant-table-cell {
+  background: #fafafa;
+  padding: 6px 12px 8px 48px;
+}
+
+.shipment-batch-table .ant-table-row:hover > td {
+  background: #f7fbff !important;
+}
+
+.shipment-batch-table .ant-table-pagination.ant-pagination {
+  margin: 12px 0 0;
+}
+
+.shipment-batch-child-table .ant-table {
+  background: transparent;
+}

@@ -4,6 +4,7 @@ import type {
   MessageStatus,
 } from "../api/protocol";
 
+// crypto.randomUUID 在部分 WebView/旧浏览器不可用，所以这里做了逐级降级。
 const createUuid = () => {
   const webCrypto = globalThis.crypto;
 
@@ -100,6 +101,7 @@ const updateAssistantMessage = (
   id: string,
   updater: (message: AssistantMessage) => AssistantMessage,
 ) =>
+  // 所有 assistant 消息更新都走这个小工具，避免在多个 action 里重复 map/filter。
   messages.map((message) => {
     if (message.id !== id || message.role !== "assistant") {
       return message;
@@ -126,6 +128,7 @@ export const useChatStore = create<ChatState>((set) => ({
   activeArtifactId: null,
   messages: [],
   addUserMessage: (text) => {
+    // 用户消息先落本地，clientMessageId 会随 POST 发给后端做幂等/追踪。
     const id = createId("local_user");
     const clientMessageId = createId("client_msg");
 
@@ -146,6 +149,7 @@ export const useChatStore = create<ChatState>((set) => ({
     return { localId: id, clientMessageId };
   },
   addAssistantPlaceholder: () => {
+    // 发起请求后先插入一个空 assistant 气泡，后续 SSE delta/artifact 会填充它。
     const id = createId("local_assistant");
 
     set((state) => ({
@@ -192,6 +196,7 @@ export const useChatStore = create<ChatState>((set) => ({
     }));
   },
   appendAssistantMarkdown: (id, delta) => {
+    // markdown.delta 是增量文本，必须 append；SSE 去重在 api/chat.ts 做。
     set((state) => ({
       messages: updateAssistantMessage(state.messages, id, (message) => ({
         ...message,
@@ -201,6 +206,7 @@ export const useChatStore = create<ChatState>((set) => ({
     }));
   },
   replaceAssistantArtifact: (id, artifact) => {
+    // artifact.replace 表示同一个 artifact id 的 3D 结构可被后端不断刷新。
     set((state) => ({
       activeArtifactId: artifact.id,
       messages: updateAssistantMessage(state.messages, id, (message) => ({

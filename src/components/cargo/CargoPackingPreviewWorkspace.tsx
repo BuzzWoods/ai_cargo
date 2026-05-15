@@ -59,6 +59,7 @@ const CargoPackingPreviewWorkspace: React.FC<
     null,
   );
 
+  // 页面打开时默认定位到推荐计划和它的第一个箱子。
   const preferredPlan = artifact ? getPreferredPlan(artifact) : null;
   const preferredPlanNo = preferredPlan?.planNo ?? null;
   const preferredContainerNo = preferredPlan?.containers[0]?.containerNo ?? null;
@@ -72,11 +73,13 @@ const CargoPackingPreviewWorkspace: React.FC<
   const firstPlacementId = layoutView?.placements[0]?.id ?? null;
 
   useEffect(() => {
+    // 切换 artifact 后重置计划/箱子选择，避免还拿着上一个方案的编号。
     setSelectedPlanNo(preferredPlanNo);
     setSelectedContainerNo(preferredContainerNo);
   }, [artifact, preferredContainerNo, preferredPlanNo]);
 
   useEffect(() => {
+    // 切换计划时，如果原来的箱号不存在，自动回到该计划第一个箱子。
     if (!selectedPlan) {
       setSelectedContainerNo(null);
       return;
@@ -91,6 +94,7 @@ const CargoPackingPreviewWorkspace: React.FC<
   }, [selectedContainerNo, selectedPlan]);
 
   useEffect(() => {
+    // 切换箱子后默认选中第一件货物，让右侧信息卡有明确上下文。
     setSelectedPlacementId(firstPlacementId);
   }, [firstPlacementId, layoutViewId]);
 

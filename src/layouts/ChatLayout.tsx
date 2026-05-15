@@ -11,6 +11,7 @@ const ChatLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // 左侧菜单只负责切路由，具体页面状态都留给各自 view/store 管理。
   const handleMenuClick = ({ key }: { key: string }) => {
     const item = menuItems.find((i) => i?.key === key);
     if (item?.path) {

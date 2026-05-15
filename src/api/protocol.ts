@@ -6,6 +6,7 @@ export type StreamEventType =
   | "message.error"
   | "heartbeat";
 
+// 这个文件是“前后端协议边界”：SSE/HTTP 返回的数据先落到这些类型，再被页面转换成 UI 状态。
 export type MessageRole = "user" | "assistant";
 export type MessageStatus =
   | "pending"
@@ -153,6 +154,7 @@ export interface ChatInputFileRef {
   uri?: string;
 }
 
+// 前端发消息时只提交自然语言、会话 id 和可选文件；3D 结构由后端/AI 通过 artifact 返回。
 export interface ChatPostRequest {
   conversationId: string | null;
   clientMessageId: string;

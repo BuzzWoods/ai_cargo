@@ -31,6 +31,7 @@ const getErrorMessage = (error: unknown) => {
 
 const AgentChat: React.FC = () => {
   const navigate = useNavigate();
+  // 当前只允许一个流式请求在跑；切换页面/清空历史时会 abort 这条请求。
   const abortControllerRef = useRef<AbortController | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
@@ -54,6 +55,7 @@ const AgentChat: React.FC = () => {
   const [isExiting, setIsExiting] = useState(false);
   const [showHistory, setShowHistory] = useState(messages.length > 0);
 
+  // 欢迎页和聊天记录是同一屏里的两个状态，通过 showHistory 做过渡切换。
   useEffect(() => {
     if (messages.length === 0) {
       setShowHistory(false);
@@ -85,6 +87,7 @@ const AgentChat: React.FC = () => {
   );
 
   useEffect(() => {
+    // 组件卸载时关闭 SSE，防止后台连接继续写入已卸载的页面。
     return () => {
       abortControllerRef.current?.abort();
     };
@@ -122,6 +125,7 @@ const AgentChat: React.FC = () => {
       return;
     }
 
+    // 一次发送会产生两个本地节点：用户气泡 + 等待 SSE 填充的 assistant 占位气泡。
     const { localId: localUserMessageId, clientMessageId } =
       addUserMessage(trimmedContent);
     const localAssistantMessageId = addAssistantPlaceholder();
@@ -130,6 +134,7 @@ const AgentChat: React.FC = () => {
     setInputValue("");
     let currentServerRequestId: string | undefined;
     let currentServerMessageId: string | undefined;
+    // accepted/start/delta 都可能携带服务端 id；这里统一把本地气泡和服务端消息绑定起来。
     const ensureAssistantServerBinding = (event: {
       requestId: string;
       messageId: string;
@@ -154,6 +159,7 @@ const AgentChat: React.FC = () => {
         text: trimmedContent,
         signal: controller.signal,
         onAccepted: (response) => {
+          // HTTP accepted 只说明任务进入后端队列，UI 先进入 accepted 状态等待 SSE。
           currentServerRequestId = response.requestId;
           bindServerConversationId(response.conversationId);
           bindUserServerConversationId(
@@ -166,6 +172,7 @@ const AgentChat: React.FC = () => {
           });
         },
         onEvent: (event) => {
+          // 防御：如果旧请求/重连事件混进来，不写入当前 assistant 气泡。
           if (
             currentServerRequestId &&
             event.requestId !== currentServerRequestId
@@ -188,6 +195,7 @@ const AgentChat: React.FC = () => {
           }
 
           if (event.type === "markdown.delta") {
+            // 文本是 markdown 增量，页面边收边渲染。
             appendAssistantMarkdown(
               localAssistantMessageId,
               event.payload.delta,
@@ -196,6 +204,7 @@ const AgentChat: React.FC = () => {
           }
 
           if (event.type === "artifact.replace") {
+            // 3D 数据是结构化 artifact；这里不改 inner data，只存入 store 交给 3D 组件解析。
             if (!event.payload.artifact) {
               return;
             }
@@ -285,6 +294,7 @@ const AgentChat: React.FC = () => {
   });
 
   const renderSender = () => {
+    // Sender 左侧按钮：业务单号弹窗用于把后端批次号快速追加到自然语言输入框。
     const items: MenuProps["items"] = [
       {
         key: "clear",

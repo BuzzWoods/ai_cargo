@@ -67,6 +67,7 @@ export interface ShipmentBatchPlanPage {
   total?: number;
 }
 
+// 弹窗查询目前只暴露批次编号模糊搜索和分页，其余固定参数按当前后端联调口径补齐。
 const createShipmentBatchRequestBody = ({
   pageNum,
   pageSize,
@@ -91,6 +92,7 @@ export const fetchShipmentBatchPlanList = async (
   query: ShipmentBatchPlanQuery,
   signal?: AbortSignal,
 ): Promise<ShipmentBatchPlanPage> => {
+  // 业务单号列表是普通 HTTP 查询，不参与聊天 SSE；它只负责辅助组装输入框文本。
   const response = await fetch(createApiUrl("chat/getShipmentBatchPlanList"), {
     method: "POST",
     signal,
@@ -121,6 +123,7 @@ export const fetchShipmentBatchPlanList = async (
     );
   }
 
+  // 成功响应也做一层空数组兜底，避免表格因为 list 缺失直接崩。
   const data = unwrapApiResponseData(rawJson) as Partial<ShipmentBatchPlanPage>;
 
   return {

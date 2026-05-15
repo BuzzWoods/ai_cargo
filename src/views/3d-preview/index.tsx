@@ -30,6 +30,7 @@ const getArtifactCandidate = (value: unknown) => {
     return value;
   }
 
+  // 调试时常见输入有三种：完整 artifact、artifact.replace payload、或者 artifact.data。
   const payload = value.payload;
 
   if (isRecord(payload) && isRecord(payload.artifact)) {
@@ -52,6 +53,7 @@ const getStringValue = (
 const normalizeCargoPackingArtifact = (
   input: unknown,
 ): CargoPackingPlansArtifact => {
+  // 这里只做外层包装归一化，不修改 data.plans 里的业务内容。
   const candidate = getArtifactCandidate(input);
 
   if (!isRecord(candidate)) {
@@ -110,6 +112,7 @@ const readSavedJson = () => {
 };
 
 const parseSavedArtifact = (jsonText: string) => {
+  // 页面刷新后尽量恢复上次调试数据；恢复失败则静默回到输入态。
   if (!jsonText.trim()) {
     return null;
   }
@@ -131,6 +134,7 @@ const Cargo3DPreviewPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const parseJson = () => {
+    // 点击“解析并渲染”后，把 JSON 转成与聊天页一致的 artifact，再交给同一个 3D 工作台。
     try {
       const nextArtifact = normalizeCargoPackingArtifact(JSON.parse(jsonText));
 

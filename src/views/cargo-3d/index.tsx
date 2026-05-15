@@ -8,6 +8,7 @@ const Cargo3DPage: React.FC = () => {
   const navigate = useNavigate();
   const { messages, activeArtifactId } = useChatStore();
 
+  // 完整 3D 页不重新请求数据，只读取聊天过程中已经保存到 store 的 artifact。
   const artifacts = messages
     .filter((message) => message.role === "assistant")
     .flatMap((message) => Object.values(message.artifacts));

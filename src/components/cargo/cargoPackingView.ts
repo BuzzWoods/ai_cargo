@@ -43,6 +43,7 @@ const hashString = (value: string) => {
 const getItemColor = (item: CargoPackingItem) =>
   palette[hashString(item.skuCode || item.boxId) % palette.length];
 
+// 坐标/尺寸/百分比统一经过 Decimal，减少 0.15500000000000008 这类浮点尾巴。
 export const toDecimalNumber = (
   value: number | string | Decimal,
   decimalPlaces = 6,
@@ -77,6 +78,7 @@ export const isCargoPackingPlansArtifact = (
 ): artifact is CargoPackingPlansArtifact =>
   Array.isArray(artifact?.data?.plans);
 
+// 多计划入口：优先展示后端推荐计划，没有推荐时兜底展示第一个计划。
 export const getPreferredPlan = (
   artifact: CargoPackingPlansArtifact | null | undefined,
 ) => {
@@ -123,6 +125,7 @@ export const createCargoLayoutView = (
     return null;
   }
 
+  // 后端给的是箱内后端坐标；这里转换成 three.js 的中心点坐标，供 mesh.position 使用。
   const cargoSpecs = Object.fromEntries(
     packingContainer.items.map((item) => [
       item.boxId,

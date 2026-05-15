@@ -74,6 +74,7 @@ const normalizeBatchRows = (
   list: LogisticsShipmentBatchPlan[],
 ): ShipmentBatchRow[] =>
   list.map((batch, batchIndex) => {
+    // AntD 父子表都依赖稳定 rowKey；后端 id 缺失时用业务编号/索引兜底。
     const rowKey = buildBatchRowKey(batch, batchIndex);
     const childRows = (batch.logisticsShipmentPlanList ?? []).map(
       (plan, planIndex) => ({
@@ -107,6 +108,7 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
   const [selectedPlanKeys, setSelectedPlanKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  // useRequest 会记住上次 run 的参数；这里不把业务参数传给 run，统一从 ref 读取最新查询条件。
   const queryRef = useRef<ShipmentBatchPlanQuery>({
     pageNum: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -138,6 +140,7 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
 
   const loadBatchPlans = useCallback(
     (nextPageNum: number, nextPageSize: number, nextKeyword: string) => {
+      // 先更新 ref，再触发无参 run，避免请求依赖 ahooks 的入参缓存。
       queryRef.current = {
         pageNum: nextPageNum,
         pageSize: nextPageSize,
@@ -155,6 +158,7 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
   }, [loadBatchPlans, open, pageNum, pageSize, queryKeyword]);
 
   const toggleBatchSelection = (batch: ShipmentBatchRow, selected: boolean) => {
+    // 勾选父批次时，同步勾选/取消它下面所有出货计划。
     setSelectedBatchMap((current) => {
       const next = { ...current };
 
@@ -186,6 +190,7 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
     batchRows: ShipmentBatchRow[],
     selected: boolean,
   ) => {
+    // 表头全选只影响当前页变更的父行，同时同步这些父行的子行勾选态。
     setSelectedBatchMap((current) => {
       const next = { ...current };
 
@@ -221,6 +226,7 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
     batch: ShipmentBatchRow,
     nextSelectedPlanKeys: React.Key[],
   ) => {
+    // 子表只要选中任意计划，就认为父批次被选择；子表清空则移除父批次。
     const selectedChildKeySet = new Set(nextSelectedPlanKeys.map(String));
 
     setSelectedPlanKeys((current) => {
@@ -362,8 +368,10 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
   };
 
   const renderExpandedRow = (batch: ShipmentBatchRow) => (
+    // 展开行就是该批次下的出货计划明细，父子勾选状态通过 selectedPlanKeys 联动。
     <Table<ShipmentPlanRow>
       rowKey="rowKey"
+      className="shipment-batch-table shipment-batch-child-table"
       columns={childColumns}
       dataSource={batch.childRows}
       pagination={false}
@@ -384,7 +392,8 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
     <Modal
       title="选择出货批次"
       open={open}
-      width={1180}
+      width={980}
+      rootClassName="shipment-batch-selector-modal"
       onCancel={onCancel}
       destroyOnHidden
       footer={
@@ -405,13 +414,13 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Input.Search
             allowClear
             value={keyword}
             placeholder="按出货批次编号模糊搜索"
-            className="max-w-sm"
+            className="max-w-xs"
             onChange={(event) => setKeyword(event.target.value)}
             onSearch={(value) => {
               setPageNum(1);
@@ -430,8 +439,8 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
         </div>
 
         {selectedBatchNos.length ? (
-          <div className="rounded-xl bg-slate-50 p-3">
-            <div className="mb-2 text-xs font-semibold text-slate-500">
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <div className="mb-1.5 text-xs font-semibold text-slate-500">
               已选出货批次
             </div>
             <div className="flex flex-wrap gap-2">
@@ -456,9 +465,11 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
 
         <Table<ShipmentBatchRow>
           rowKey="rowKey"
+          className="shipment-batch-table"
           columns={parentColumns}
           dataSource={rows}
           loading={loading}
+          size="small"
           rowSelection={parentRowSelection}
           expandable={{
             expandedRowRender: renderExpandedRow,
@@ -475,7 +486,6 @@ const ShipmentBatchSelectorModal: React.FC<ShipmentBatchSelectorModalProps> = ({
               setPageSize(nextPageSize);
             },
           }}
-          scroll={{ x: 860 }}
         />
       </div>
     </Modal>

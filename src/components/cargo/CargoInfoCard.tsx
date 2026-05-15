@@ -18,6 +18,7 @@ const CargoInfoCard = ({
   layoutView,
   selectedPlacementId,
 }: CargoInfoCardProps) => {
+  // 右侧卡片总是展示当前选中的 3D 箱体；没有选中时兜底展示第一件货物。
   const placement =
     layoutView.placements.find((item) => item.id === selectedPlacementId) ??
     layoutView.placements[0] ??
