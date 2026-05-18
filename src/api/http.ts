@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://192.168.110.64:9411";
+const DEFAULT_API_BASE_URL = "http://192.168.110.156:9411";
 
 // API 基础地址统一从这里生成，方便本地/测试/生产只改环境变量。
 export const apiBaseUrl = (

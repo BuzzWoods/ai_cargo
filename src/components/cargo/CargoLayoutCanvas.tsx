@@ -4,6 +4,7 @@ import {
   Edges,
   OrbitControls,
   PerspectiveCamera,
+  Text as DreiText,
 } from "@react-three/drei";
 import Decimal from "decimal.js";
 import * as THREE from "three";
@@ -11,6 +12,7 @@ import type { CargoPlacement } from "../../api/protocol";
 import {
   decimalMaxNumber,
   toDecimalNumber,
+  type CargoLayoutContainerView,
   type CargoLayoutView,
 } from "./cargoPackingView";
 
@@ -19,6 +21,7 @@ interface CargoLayoutCanvasProps {
   compact?: boolean;
   interactive?: boolean;
   selectedPlacementId?: string | null;
+  selectedContainerNo?: string | null;
   onPlacementSelect?: (placement: CargoPlacement) => void;
 }
 
@@ -43,8 +46,18 @@ const CAMERA_FOV_DEG = 40;
 const getCameraConfig = (
   artifact: CargoLayoutView,
   sceneVerticalOffset: number,
+  selectedContainerNo: string | null,
 ) => {
-  const { w, h, d } = artifact.container.size;
+  const selectedContainerView =
+    artifact.containers.find(
+      (containerView) => containerView.id === selectedContainerNo,
+    ) ?? artifact.containers[0];
+  const focusSize =
+    selectedContainerView?.container.size ?? artifact.container.size;
+  const { w, h, d } = focusSize;
+  const targetX = selectedContainerView?.offset.x ?? 0;
+  const targetZ = selectedContainerView?.offset.z ?? 0;
+  const sceneSize = artifact.container.size;
   const fovRadians = toDecimalNumber(
     new Decimal(CAMERA_FOV_DEG).mul(Math.PI).div(180),
   );
@@ -65,6 +78,19 @@ const getCameraConfig = (
       .mul(1.18),
     10,
   );
+  const sceneRadius = toDecimalNumber(
+    new Decimal(sceneSize.w)
+      .pow(2)
+      .plus(new Decimal(sceneSize.h).pow(2))
+      .plus(new Decimal(sceneSize.d).pow(2))
+      .sqrt()
+      .div(2),
+  );
+  const sceneDistance = toDecimalNumber(
+    new Decimal(sceneRadius)
+      .div(Math.sin(toDecimalNumber(new Decimal(fovRadians).div(2))))
+      .mul(1.18),
+  );
   const horizontalDistance = toDecimalNumber(
     new Decimal(distance).mul(Math.cos(angleRadians)),
   );
@@ -75,22 +101,22 @@ const getCameraConfig = (
     new Decimal(horizontalDistance).div(Math.SQRT2),
   );
   const target: [number, number, number] = [
-    0,
+    targetX,
     toDecimalNumber(
       new Decimal(sceneVerticalOffset).plus(new Decimal(h).mul(0.08)),
     ),
-    0,
+    targetZ,
   ];
   const position: [number, number, number] = [
-    diagonalDistance,
+    toDecimalNumber(new Decimal(target[0]).plus(diagonalDistance)),
     toDecimalNumber(new Decimal(target[1]).plus(cameraHeight)),
-    diagonalDistance,
+    toDecimalNumber(new Decimal(target[2]).plus(diagonalDistance)),
   ];
 
   return {
     position,
     target,
-    maxDistance: decimalMaxNumber(new Decimal(distance).mul(2.5), 24),
+    maxDistance: decimalMaxNumber(new Decimal(sceneDistance).mul(2.5), 24),
   };
 };
 
@@ -126,23 +152,31 @@ const CargoCamera = ({
   );
 };
 
-const CargoLayoutScene = ({
-  artifact,
-  interactive = false,
-  selectedPlacementId,
-  onPlacementSelect,
+const ContainerShell = ({
+  containerView,
+  selected,
 }: {
-  artifact: CargoLayoutView;
-  interactive?: boolean;
-  selectedPlacementId?: string | null;
-  onPlacementSelect?: (placement: CargoPlacement) => void;
+  containerView: CargoLayoutContainerView;
+  selected: boolean;
 }) => {
-  const { container, placements } = artifact;
+  const { container, label, labelDepth, labelFontSize, offset } =
+    containerView;
   const { w, h, d } = container.size;
+  const surfaceColor = selected ? "#facc15" : "#38bdf8";
+  const edgeColor = selected ? "#d97706" : "#0284c7";
+  const floorColor = selected ? "#fef3c7" : "#e0f2fe";
+  const labelColor = selected ? "#92400e" : "#075985";
+  const labelMaxWidth = toDecimalNumber(new Decimal(w).mul(0.5));
+  const labelPosition: [number, number, number] = [
+    0,
+    toDecimalNumber(new Decimal(h).div(2).negated().plus(0.045)),
+    toDecimalNumber(
+      new Decimal(d).div(2).plus(new Decimal(labelDepth).div(2)),
+    ),
+  ];
 
   return (
-    <group>
-      {/* 集装箱外框：底面深色，其余面透明，方便看清内部货物堆叠。 */}
+    <group position={[offset.x, offset.y, offset.z]}>
       <mesh>
         <boxGeometry
           args={[
@@ -153,51 +187,94 @@ const CargoLayoutScene = ({
         />
         <meshStandardMaterial
           attach="material-0"
-          color="#38bdf8"
+          color={surfaceColor}
           transparent
-          opacity={0.12}
+          opacity={selected ? 0.18 : 0.12}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-1"
-          color="#38bdf8"
+          color={surfaceColor}
           transparent
-          opacity={0.12}
+          opacity={selected ? 0.18 : 0.12}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-2"
-          color="#38bdf8"
+          color={surfaceColor}
           transparent
-          opacity={0.12}
+          opacity={selected ? 0.18 : 0.12}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-3"
-          color="#334155"
+          color={floorColor}
+          transparent
+          opacity={selected ? 0.72 : 0.58}
           side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-4"
-          color="#38bdf8"
+          color={surfaceColor}
           transparent
-          opacity={0.12}
+          opacity={selected ? 0.18 : 0.12}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-5"
-          color="#38bdf8"
+          color={surfaceColor}
           transparent
-          opacity={0.12}
+          opacity={selected ? 0.18 : 0.12}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
-        <Edges scale={1} color="#0284c7" />
+        <Edges scale={1} color={edgeColor} />
       </mesh>
+
+      <DreiText
+        position={labelPosition}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={labelFontSize}
+        maxWidth={labelMaxWidth}
+        textAlign="center"
+        anchorX="center"
+        anchorY="middle"
+        color={labelColor}
+      >
+        {label}
+      </DreiText>
+    </group>
+  );
+};
+
+const CargoLayoutScene = ({
+  artifact,
+  interactive = false,
+  selectedPlacementId,
+  selectedContainerNo,
+  onPlacementSelect,
+}: {
+  artifact: CargoLayoutView;
+  interactive?: boolean;
+  selectedPlacementId?: string | null;
+  selectedContainerNo?: string | null;
+  onPlacementSelect?: (placement: CargoPlacement) => void;
+}) => {
+  const { containers, placements } = artifact;
+
+  return (
+    <group>
+      {containers.map((containerView) => (
+        <ContainerShell
+          key={containerView.id}
+          containerView={containerView}
+          selected={containerView.id === selectedContainerNo}
+        />
+      ))}
 
       {placements.map((placement) => {
         // 每个 placement 对应一个箱体 mesh；点击 mesh 会同步右侧货物信息卡片。
@@ -246,6 +323,7 @@ const CargoLayoutCanvas = ({
   compact = false,
   interactive = false,
   selectedPlacementId = null,
+  selectedContainerNo = null,
   onPlacementSelect,
 }: CargoLayoutCanvasProps) => {
   // compact 用于聊天小卡片，完整页则撑满工作区并开启交互选择。
@@ -258,9 +336,16 @@ const CargoLayoutCanvas = ({
   );
   const sceneVerticalOffset = compact ? 0.7 : 1.25;
   const cameraConfig = useMemo(
-    () => getCameraConfig(artifact, sceneVerticalOffset),
-    [artifact, sceneVerticalOffset],
+    () => getCameraConfig(artifact, sceneVerticalOffset, selectedContainerNo),
+    [artifact, sceneVerticalOffset, selectedContainerNo],
   );
+  const gridSize = decimalMaxNumber(
+    28,
+    new Decimal(Math.max(artifact.container.size.w, artifact.container.size.d))
+      .mul(1.24)
+      .toNumber(),
+  );
+  const gridDivisions = Math.max(28, Math.ceil(gridSize));
 
   return (
     <div
@@ -286,7 +371,7 @@ const CargoLayoutCanvas = ({
         <directionalLight position={[12, 14, 8]} intensity={2.8} />
         <directionalLight position={[-10, 6, -4]} intensity={0.5} />
         <gridHelper
-          args={[28, 28, "#cbd5e1", "#e2e8f0"]}
+          args={[gridSize, gridDivisions, "#cbd5e1", "#e2e8f0"]}
           position={[
             0,
             toDecimalNumber(new Decimal(floorY).plus(sceneVerticalOffset)),
@@ -298,11 +383,12 @@ const CargoLayoutCanvas = ({
             artifact={artifact}
             interactive={interactive}
             selectedPlacementId={selectedPlacementId}
+            selectedContainerNo={selectedContainerNo}
             onPlacementSelect={onPlacementSelect}
           />
         </group>
         <OrbitControls
-          key={artifact.id}
+          key={`${artifact.id}:${selectedContainerNo ?? ""}`}
           makeDefault
           enableDamping
           dampingFactor={0.05}

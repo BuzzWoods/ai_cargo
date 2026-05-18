@@ -74,6 +74,7 @@ export interface CargoPlacement {
   meta?: {
     note?: string;
     item?: CargoPackingItem;
+    packingContainer?: CargoPackingContainer;
   };
 }
 

@@ -25,18 +25,28 @@ const CargoInfoCard = ({
     null;
 
   if (!placement) {
-    return <Text type="secondary">当前箱子暂无货物明细。</Text>;
+    return (
+      <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
+        <Text type="secondary">当前箱子暂无货物明细。</Text>
+      </div>
+    );
   }
 
   const item = placement.meta?.item;
   const spec = layoutView.cargoSpecs[placement.cargoId];
 
   if (!item || !spec) {
-    return <Text type="secondary">当前货物信息不完整，无法展示详细内容。</Text>;
+    return (
+      <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
+        <Text type="secondary">当前货物信息不完整，无法展示详细内容。</Text>
+      </div>
+    );
   }
 
+  const packingContainer = placement.meta?.packingContainer;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
       <div className="space-y-1">
         <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
           货物信息
@@ -53,6 +63,15 @@ const CargoInfoCard = ({
         <Tag color="cyan" variant="filled" className="m-0 rounded-md px-2 py-0.5">
           {item.boxId}
         </Tag>
+        {packingContainer ? (
+          <Tag
+            color="purple"
+            variant="filled"
+            className="m-0 rounded-md px-2 py-0.5"
+          >
+            {packingContainer.containerNo}
+          </Tag>
+        ) : null}
         <Tag color="gold" variant="filled" className="m-0 rounded-md px-2 py-0.5">
           箱数 {item.cartonCount}
         </Tag>

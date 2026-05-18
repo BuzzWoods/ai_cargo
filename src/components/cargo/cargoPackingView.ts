@@ -13,10 +13,29 @@ export interface CargoLayoutView {
   id: string;
   title: string;
   container: CargoContainer;
+  containers: CargoLayoutContainerView[];
   cargoSpecs: Record<string, CargoSpec>;
   placements: CargoPlacement[];
   plan: CargoPackingPlan;
   packingContainer: CargoPackingContainer;
+}
+
+export interface CargoLayoutContainerView {
+  id: string;
+  label: string;
+  container: CargoContainer;
+  packingContainer: CargoPackingContainer;
+  labelDepth: number;
+  labelFontSize: number;
+  offset: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  grid: {
+    row: number;
+    column: number;
+  };
 }
 
 const palette = [
@@ -42,6 +61,11 @@ const hashString = (value: string) => {
 
 const getItemColor = (item: CargoPackingItem) =>
   palette[hashString(item.skuCode || item.boxId) % palette.length];
+
+const getPlacementId = (
+  packingContainer: CargoPackingContainer,
+  item: CargoPackingItem,
+) => `${packingContainer.containerNo}:${item.boxId}`;
 
 // 坐标/尺寸/百分比统一经过 Decimal，减少 0.15500000000000008 这类浮点尾巴。
 export const toDecimalNumber = (
@@ -116,6 +140,55 @@ export const getContainerByNo = (
   plan?.containers[0] ??
   null;
 
+const createPlacement = (
+  packingContainer: CargoPackingContainer,
+  item: CargoPackingItem,
+  offset = { x: 0, y: 0, z: 0 },
+): CargoPlacement => {
+  const placementId = getPlacementId(packingContainer, item);
+  const cargoId = placementId;
+
+  return {
+    id: placementId,
+    cargoId,
+    position: {
+      x: toDecimalNumber(
+        new Decimal(item.x)
+          .minus(new Decimal(packingContainer.innerLength).div(2))
+          .plus(new Decimal(item.length).div(2))
+          .plus(offset.x),
+      ),
+      y: toDecimalNumber(
+        new Decimal(item.z)
+          .minus(new Decimal(packingContainer.innerHeight).div(2))
+          .plus(new Decimal(item.height).div(2))
+          .plus(offset.y),
+      ),
+      z: toDecimalNumber(
+        new Decimal(item.y)
+          .minus(new Decimal(packingContainer.innerWidth).div(2))
+          .plus(new Decimal(item.width).div(2))
+          .plus(offset.z),
+      ),
+    },
+    color: getItemColor(item),
+    meta: {
+      item,
+      packingContainer,
+    },
+  };
+};
+
+const createCargoSpec = (item: CargoPackingItem): CargoSpec => ({
+  weightKg: item.weightKg,
+  dimensions: {
+    w: item.length,
+    h: item.height,
+    d: item.width,
+  },
+  volumeM3: item.volumeCbm,
+});
+
 export const createCargoLayoutView = (
   artifact: CargoPackingPlansArtifact | null,
   plan: CargoPackingPlan | null,
@@ -128,48 +201,127 @@ export const createCargoLayoutView = (
   // 后端给的是箱内后端坐标；这里转换成 three.js 的中心点坐标，供 mesh.position 使用。
   const cargoSpecs = Object.fromEntries(
     packingContainer.items.map((item) => [
-      item.boxId,
-      {
-        weightKg: item.weightKg,
-        dimensions: {
-          w: item.length,
-          h: item.height,
-          d: item.width,
-        },
-        volumeM3: item.volumeCbm,
-      },
+      getPlacementId(packingContainer, item),
+      createCargoSpec(item),
     ]),
   );
-  const placements = packingContainer.items.map((item) => ({
-    id: item.boxId,
-    cargoId: item.boxId,
-    position: {
-      x: toDecimalNumber(
-        new Decimal(item.x)
-          .minus(new Decimal(packingContainer.innerLength).div(2))
-          .plus(new Decimal(item.length).div(2)),
-      ),
-      y: toDecimalNumber(
-        new Decimal(item.z)
-          .minus(new Decimal(packingContainer.innerHeight).div(2))
-          .plus(new Decimal(item.height).div(2)),
-      ),
-      z: toDecimalNumber(
-        new Decimal(item.y)
-          .minus(new Decimal(packingContainer.innerWidth).div(2))
-          .plus(new Decimal(item.width).div(2)),
-      ),
+  const placements = packingContainer.items.map((item) =>
+    createPlacement(packingContainer, item),
+  );
+  const container: CargoContainer = {
+    id: packingContainer.containerNo,
+    size: {
+      w: packingContainer.innerLength,
+      h: packingContainer.innerHeight,
+      d: packingContainer.innerWidth,
     },
-    color: getItemColor(item),
-    meta: {
-      item,
-    },
-  }));
+    unit: "m",
+  };
 
   return {
     id: `${artifact.id}:${plan.planNo}:${packingContainer.containerNo}`,
     title: artifact.title,
-    container: {
+    container,
+    containers: [
+      {
+        id: packingContainer.containerNo,
+        label: `${packingContainer.containerNo} ${packingContainer.containerType}`,
+        container,
+        packingContainer,
+        labelDepth: decimalMaxNumber(
+          new Decimal(packingContainer.innerWidth).mul(0.24),
+          0.9,
+        ),
+        labelFontSize: decimalMaxNumber(
+          0.36,
+          Decimal.min(
+            new Decimal(0.62),
+            new Decimal(packingContainer.innerLength).mul(0.045),
+          ),
+        ),
+        offset: { x: 0, y: 0, z: 0 },
+        grid: { row: 0, column: 0 },
+      },
+    ],
+    cargoSpecs,
+    placements,
+    plan,
+    packingContainer,
+  };
+};
+
+const GRID_COLUMNS = 3;
+
+export const createCargoPackingSceneView = (
+  artifact: CargoPackingPlansArtifact | null,
+  plan: CargoPackingPlan | null,
+  selectedContainer: CargoPackingContainer | null,
+): CargoLayoutView | null => {
+  if (!isCargoPackingPlansArtifact(artifact) || !plan) {
+    return null;
+  }
+
+  const packingContainers = plan.containers;
+
+  if (!packingContainers.length) {
+    return null;
+  }
+
+  const currentContainer =
+    packingContainers.find(
+      (container) => container.containerNo === selectedContainer?.containerNo,
+    ) ?? packingContainers[0];
+  const columnCount = Math.min(GRID_COLUMNS, packingContainers.length);
+  const rowCount = Math.ceil(packingContainers.length / GRID_COLUMNS);
+  const maxLength = decimalMaxNumber(
+    0,
+    ...packingContainers.map((container) => container.innerLength),
+  );
+  const maxWidth = decimalMaxNumber(
+    0,
+    ...packingContainers.map((container) => container.innerWidth),
+  );
+  const maxHeight = decimalMaxNumber(
+    0,
+    ...packingContainers.map((container) => container.innerHeight),
+  );
+  const labelDepth = decimalMaxNumber(new Decimal(maxWidth).mul(0.26), 1);
+  const labelFontSize = decimalMaxNumber(
+    0.36,
+    Decimal.min(new Decimal(0.62), new Decimal(maxLength).mul(0.045)),
+  );
+  const gapX = decimalMaxNumber(new Decimal(maxLength).mul(0.24), 1.8);
+  const gapZ = decimalMaxNumber(new Decimal(maxWidth).mul(0.2), 1.1);
+  const sceneWidth = toDecimalNumber(
+    new Decimal(columnCount)
+      .mul(maxLength)
+      .plus(new Decimal(columnCount - 1).mul(gapX)),
+  );
+  const sceneDepth = toDecimalNumber(
+    new Decimal(rowCount)
+      .mul(maxWidth)
+      .plus(new Decimal(rowCount).mul(labelDepth))
+      .plus(new Decimal(rowCount - 1).mul(gapZ)),
+  );
+  const containerViews = packingContainers.map((packingContainer, index) => {
+    const column = index % GRID_COLUMNS;
+    const row = Math.floor(index / GRID_COLUMNS);
+    const offset = {
+      x: toDecimalNumber(
+        new Decimal(column)
+          .mul(new Decimal(maxLength).plus(gapX))
+          .minus(new Decimal(sceneWidth).div(2))
+          .plus(new Decimal(maxLength).div(2)),
+      ),
+      y: 0,
+      z: toDecimalNumber(
+        new Decimal(row)
+          .mul(new Decimal(maxWidth).plus(labelDepth).plus(gapZ))
+          .minus(new Decimal(sceneDepth).div(2))
+          .plus(new Decimal(maxWidth).div(2)),
+      ),
+    };
+    const container: CargoContainer = {
       id: packingContainer.containerNo,
       size: {
         w: packingContainer.innerLength,
@@ -177,10 +329,49 @@ export const createCargoLayoutView = (
         d: packingContainer.innerWidth,
       },
       unit: "m",
+    };
+
+    return {
+      id: packingContainer.containerNo,
+      label: `${packingContainer.containerNo} ${packingContainer.containerType}`,
+      container,
+      packingContainer,
+      labelDepth,
+      labelFontSize,
+      offset,
+      grid: { row, column },
+    };
+  });
+  const cargoSpecs = Object.fromEntries(
+    packingContainers.flatMap((packingContainer) =>
+      packingContainer.items.map((item) => [
+        getPlacementId(packingContainer, item),
+        createCargoSpec(item),
+      ]),
+    ),
+  );
+  const placements = containerViews.flatMap((containerView) =>
+    containerView.packingContainer.items.map((item) =>
+      createPlacement(containerView.packingContainer, item, containerView.offset),
+    ),
+  );
+
+  return {
+    id: `${artifact.id}:${plan.planNo}:scene`,
+    title: artifact.title,
+    container: {
+      id: `${plan.planNo}-scene`,
+      size: {
+        w: sceneWidth,
+        h: maxHeight,
+        d: sceneDepth,
+      },
+      unit: "m",
     },
+    containers: containerViews,
     cargoSpecs,
     placements,
     plan,
-    packingContainer,
+    packingContainer: currentContainer,
   };
 };

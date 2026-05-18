@@ -3,7 +3,7 @@ import type { AssistantMessage } from "../../store/useChatStore";
 import MarkdownRenderer from "../markdown/MarkdownRenderer";
 import CargoLayoutCanvas from "../cargo/CargoLayoutCanvas";
 import {
-  createCargoLayoutView,
+  createCargoPackingSceneView,
   formatPercent,
   getContainerByNo,
   getPlanByNo,
@@ -87,7 +87,11 @@ const AssistantMessageContent = ({
           plan,
           previewSelection?.containerNo ?? null,
         );
-        const layoutView = createCargoLayoutView(artifact, plan, container);
+        const layoutView = createCargoPackingSceneView(
+          artifact,
+          plan,
+          container,
+        );
 
         if (!plan || !container || !layoutView) {
           return null;
@@ -169,6 +173,7 @@ const AssistantMessageContent = ({
                 artifact={layoutView}
                 compact
                 interactive={false}
+                selectedContainerNo={container.containerNo}
               />
             </div>
           </div>

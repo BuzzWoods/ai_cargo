@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import {
   Button,
-  Collapse,
   Empty,
   Select,
   Tag,
@@ -17,10 +16,10 @@ import {
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import type { CargoPackingPlansArtifact } from "../../api/protocol";
 import CargoLayoutCanvas from "./CargoLayoutCanvas";
+import CargoContainerSummaryCard from "./CargoContainerSummaryCard";
 import CargoInfoCard from "./CargoInfoCard";
 import {
-  createCargoLayoutView,
-  formatPercent,
+  createCargoPackingSceneView,
   getContainerByNo,
   getPlanByNo,
   getPreferredPlan,
@@ -93,11 +92,44 @@ const CargoPackingPreviewWorkspace: React.FC<
     currentSelectedContainerNo,
   );
   const layoutView = useMemo(
-    () => createCargoLayoutView(artifact, selectedPlan, selectedContainer),
+    () => createCargoPackingSceneView(artifact, selectedPlan, selectedContainer),
     [artifact, selectedContainer, selectedPlan],
   );
   const layoutViewId = layoutView?.id ?? null;
-  const firstPlacementId = layoutView?.placements[0]?.id ?? null;
+  const currentContainerPlacementId =
+    layoutView?.placements.find(
+      (placement) =>
+        placement.meta?.packingContainer?.containerNo ===
+        selectedContainer?.containerNo,
+    )?.id ?? null;
+  const firstPlacementId =
+    currentContainerPlacementId ?? layoutView?.placements[0]?.id ?? null;
+  const currentContainerPlacements = useMemo(
+    () =>
+      layoutView?.placements.filter(
+        (placement) =>
+          placement.meta?.packingContainer?.containerNo ===
+          selectedContainer?.containerNo,
+      ) ?? [],
+    [layoutView, selectedContainer],
+  );
+  const currentCargoOptions = useMemo(
+    () =>
+      currentContainerPlacements.map((placement) => {
+        const item = placement.meta?.item;
+        const labelParts = [
+          item?.skuCode,
+          item?.boxId && item.boxId !== item.skuCode ? item.boxId : null,
+          item?.skuName,
+        ].filter(Boolean);
+
+        return {
+          label: labelParts.join(" / ") || placement.id,
+          value: placement.id,
+        };
+      }),
+    [currentContainerPlacements],
+  );
   const updateSelection = useCallback(
     (nextPlanNo: string | null, nextContainerNo: string | null) => {
       setInternalSelectedPlanNo(nextPlanNo);
@@ -196,14 +228,14 @@ const CargoPackingPreviewWorkspace: React.FC<
 
       <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="shrink-0 space-y-3 rounded-3xl p-4 backdrop-blur-sm">
-            <div className="space-y-2">
+          <div className="flex shrink-0 flex-wrap items-end gap-4 rounded-3xl p-4 backdrop-blur-sm">
+            <div className="min-w-[220px] space-y-2">
               <Text type="secondary" className="text-xs font-semibold">
                 装箱计划：
               </Text>
               <Select
                 value={selectedPlan.planNo}
-                className="min-w-[220px] max-w-full"
+                className="w-full"
                 options={artifact.data.plans.map((plan) => ({
                   label: `${plan.planNo}${plan.recommended ? " 推荐" : ""}`,
                   value: plan.planNo,
@@ -220,13 +252,13 @@ const CargoPackingPreviewWorkspace: React.FC<
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-[220px] space-y-2">
               <Text type="secondary" className="text-xs font-semibold">
                 货柜：
               </Text>
               <Select
                 value={selectedContainer.containerNo}
-                className="min-w-[220px] max-w-full"
+                className="w-full"
                 options={selectedPlan.containers.map((container) => ({
                   label: `${container.containerNo} ${container.containerType}`,
                   value: container.containerNo,
@@ -236,6 +268,22 @@ const CargoPackingPreviewWorkspace: React.FC<
                 }
               />
             </div>
+
+            <div className="w-[360px] max-w-full space-y-2">
+              <Text type="secondary" className="text-xs font-semibold">
+                当前货物：
+              </Text>
+              <Select
+                value={selectedPlacementId}
+                options={currentCargoOptions}
+                onChange={(value) => setSelectedPlacementId(value)}
+                disabled={!currentCargoOptions.length}
+                showSearch
+                optionFilterProp="label"
+                placeholder="当前货柜暂无货物明细"
+                className="w-full"
+              />
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-3xl bg-white/40 backdrop-blur-sm">
@@ -243,6 +291,7 @@ const CargoPackingPreviewWorkspace: React.FC<
               artifact={layoutView}
               interactive
               selectedPlacementId={selectedPlacementId}
+              selectedContainerNo={selectedContainer.containerNo}
               onPlacementSelect={(placement) =>
                 setSelectedPlacementId(placement.id)
               }
@@ -250,203 +299,49 @@ const CargoPackingPreviewWorkspace: React.FC<
           </div>
         </div>
 
-        <div className="h-full min-h-0 overflow-y-auto rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-sm backdrop-blur-sm scrollbar-hide">
-          <div className="space-y-5">
-            <CargoInfoCard
-              layoutView={layoutView}
-              selectedPlacementId={selectedPlacementId}
-            />
+        <div className="h-full min-h-0 space-y-4 overflow-y-auto pr-1 scrollbar-hide">
+          <CargoContainerSummaryCard
+            plan={selectedPlan}
+            container={selectedContainer}
+          />
 
-            <Collapse
-              bordered={false}
-              defaultActiveKey={["summary"]}
-              className="rounded-2xl bg-slate-50/70"
-              items={[
-                {
-                  key: "summary",
-                  label: (
-                    <Title level={4} style={{ margin: 0 }}>
-                      装载摘要
-                    </Title>
-                  ),
-                  children: (
-                    <div className="space-y-5 pt-1">
-                      <div className="flex flex-wrap gap-2">
-                        <Tag color="blue" variant="filled">
-                          {selectedPlan.summary.containerCount} 箱
-                        </Tag>
-                        <Tag color="cyan" variant="filled">
-                          平均体积{" "}
-                          {formatPercent(
-                            selectedPlan.summary.avgVolumeUtilization,
-                          )}
-                        </Tag>
-                        <Tag color="green" variant="filled">
-                          平均重量{" "}
-                          {formatPercent(
-                            selectedPlan.summary.avgWeightUtilization,
-                          )}
-                        </Tag>
-                        <Tag color="gold" variant="filled">
-                          评分 {selectedPlan.summary.totalScore}
-                        </Tag>
-                      </div>
+          <CargoInfoCard
+            layoutView={layoutView}
+            selectedPlacementId={selectedPlacementId}
+          />
 
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <Text type="secondary" className="text-xs">
-                            箱型组合
-                          </Text>
-                          <div className="mt-1 font-medium text-slate-900">
-                            {selectedPlan.summary.containerMix}
-                          </div>
-                        </div>
-                        <div>
-                          <Text type="secondary" className="text-xs">
-                            计划总重
-                          </Text>
-                          <div className="mt-1 font-medium text-slate-900">
-                            {selectedPlan.summary.totalWeightKg} kg
-                          </div>
-                        </div>
-                        <div>
-                          <Text type="secondary" className="text-xs">
-                            计划体积
-                          </Text>
-                          <div className="mt-1 font-medium text-slate-900">
-                            {selectedPlan.summary.totalVolumeCbm} cbm
-                          </div>
-                        </div>
-                        <div>
-                          <Text type="secondary" className="text-xs">
-                            当前箱货物
-                          </Text>
-                          <div className="mt-1 font-medium text-slate-900">
-                            {selectedContainer.items.length} 件
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-200/70 pt-4">
-                        <Text
-                          type="secondary"
-                          className="text-xs font-semibold"
-                        >
-                          当前箱
-                        </Text>
-                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <Text type="secondary" className="text-xs">
-                              箱型
-                            </Text>
-                            <div className="mt-1 font-medium text-slate-900">
-                              {selectedContainer.containerType}
-                            </div>
-                          </div>
-                          <div>
-                            <Text type="secondary" className="text-xs">
-                              内尺寸
-                            </Text>
-                            <div className="mt-1 font-medium text-slate-900">
-                              {selectedContainer.innerLength} x{" "}
-                              {selectedContainer.innerWidth} x{" "}
-                              {selectedContainer.innerHeight} m
-                            </div>
-                          </div>
-                          <div>
-                            <Text type="secondary" className="text-xs">
-                              体积利用
-                            </Text>
-                            <div className="mt-1 font-medium text-slate-900">
-                              {formatPercent(
-                                selectedContainer.volumeUtilization,
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <Text type="secondary" className="text-xs">
-                              重量利用
-                            </Text>
-                            <div className="mt-1 font-medium text-slate-900">
-                              {formatPercent(
-                                selectedContainer.weightUtilization,
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-200/70 pt-4">
-                        <Text
-                          type="secondary"
-                          className="text-xs font-semibold"
-                        >
-                          风险计划
-                        </Text>
-                        {selectedPlan.risks.length ? (
-                          <div className="mt-3 space-y-2">
-                            {selectedPlan.risks.map((risk) => (
-                              <div
-                                key={`${risk.riskCode}-${risk.targetId}-${risk.message}`}
-                                className="rounded-lg bg-white/70 px-3 py-2 text-sm text-slate-700"
-                              >
-                                <Tag
-                                  color={
-                                    riskColorByLevel[risk.level] ?? "default"
-                                  }
-                                  className="mb-1"
-                                >
-                                  {risk.level}
-                                </Tag>
-                                {risk.message}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-3 text-sm text-slate-500">
-                            当前计划暂无风险提示。
-                          </div>
-                        )}
-                      </div>
+          <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
+            <Title level={4} style={{ margin: 0 }}>
+              风险提示
+            </Title>
+            <div className="mt-3">
+              {selectedPlan.risks.length ? (
+                <div className="space-y-2">
+                  {selectedPlan.risks.map((risk) => (
+                    <div
+                      key={`${risk.riskCode}-${risk.targetId}-${risk.message}`}
+                      className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                    >
+                      <Tag
+                        color={riskColorByLevel[risk.level] ?? "default"}
+                        className="mb-1"
+                      >
+                        {risk.level}
+                      </Tag>
+                      {risk.message}
                     </div>
-                  ),
-                },
-              ]}
-            />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">
+                  当前计划暂无风险提示。
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 rounded-3xl border border-slate-200/70 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <Title level={4} style={{ margin: 0 }}>
-            当前箱货物
-          </Title>
-          <Text type="secondary" className="text-xs">
-            切换货物查看卡片与 3D 选中状态
-          </Text>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {layoutView.placements.map((placement) => {
-            const item = placement.meta?.item;
-
-            return (
-              <button
-                key={placement.id}
-                type="button"
-                onClick={() => setSelectedPlacementId(placement.id)}
-                className={`rounded-full border px-3 py-1 text-sm transition ${
-                  placement.id === selectedPlacementId
-                    ? "border-sky-400 bg-sky-50 text-sky-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-600"
-                }`}
-              >
-                {item?.skuCode ?? placement.id}
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 };
