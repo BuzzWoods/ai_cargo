@@ -16,17 +16,48 @@ interface AssistantMessageContentProps {
   onOpenArtifact: (artifactId: string) => void;
 }
 
+const streamingProgressTexts = [
+  "正在读取业务数据...",
+  "正在解析业务诉求...",
+  "正在计算排柜方案...",
+  "正在生成方案说明...",
+];
+
+const normalizeLine = (line: string) => line.trim().replace(/\s+/g, "");
+
+const isStreamingProgressLine = (line: string) => {
+  const normalizedLine = normalizeLine(line);
+
+  return streamingProgressTexts.some(
+    (progressText) => normalizedLine === normalizeLine(progressText),
+  );
+};
+
+export const getVisibleAssistantMarkdown = (markdownText: string) => {
+  const lines = markdownText.split(/\r?\n/);
+  const contentLines = lines.filter((line) => {
+    if (!line.trim()) {
+      return false;
+    }
+
+    return !isStreamingProgressLine(line);
+  });
+
+  return contentLines.length ? contentLines.join("\n") : markdownText;
+};
+
 const AssistantMessageContent = ({
   message,
   onOpenArtifact,
 }: AssistantMessageContentProps) => {
   // 一个 assistant 气泡可以同时包含 markdown 文本和一个或多个 3D artifact。
   const artifacts = Object.values(message.artifacts);
+  const visibleMarkdown = getVisibleAssistantMarkdown(message.markdownText);
 
   return (
     <div className="min-w-[280px] max-w-full space-y-4">
-      {message.markdownText ? (
-        <MarkdownRenderer markdown={message.markdownText} />
+      {visibleMarkdown ? (
+        <MarkdownRenderer markdown={visibleMarkdown} />
       ) : (
         <Text type="secondary">
           {message.status === "error" ? "方案生成遇到了一点问题" : "正在为您规划装箱方案，请稍候..."}

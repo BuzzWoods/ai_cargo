@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
 import { Typography, Button } from "antd";
 import {
+  CheckOutlined,
+  CopyOutlined,
   DeleteOutlined,
   LoadingOutlined,
   MoreOutlined,
@@ -10,12 +12,31 @@ import {
 import { useNavigate } from "react-router-dom";
 import { Dropdown, type MenuProps } from "antd";
 import { sendChatMessage } from "../../api/chat";
-import AssistantMessageContent from "../../components/chat/AssistantMessageContent";
+import AssistantMessageContent, {
+  getVisibleAssistantMarkdown,
+} from "../../components/chat/AssistantMessageContent";
 import ShipmentBatchSelectorModal from "../../components/chat/ShipmentBatchSelectorModal";
 import type { AssistantMessage } from "../../store/useChatStore";
 import { useChatStore } from "../../store/useChatStore";
 
 const { Text } = Typography;
+
+const copyTextToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+};
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof DOMException && error.name === "AbortError") {
@@ -33,8 +54,10 @@ const AgentChat: React.FC = () => {
   const navigate = useNavigate();
   // 当前只允许一个流式请求在跑；切换页面/清空历史时会 abort 这条请求。
   const abortControllerRef = useRef<AbortController | null>(null);
+  const copyResetTimerRef = useRef<number | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const {
     serverConversationId,
     messages,
@@ -90,6 +113,9 @@ const AgentChat: React.FC = () => {
     // 组件卸载时关闭 SSE，防止后台连接继续写入已卸载的页面。
     return () => {
       abortControllerRef.current?.abort();
+      if (copyResetTimerRef.current) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
     };
   }, []);
 
@@ -117,6 +143,91 @@ const AgentChat: React.FC = () => {
         : appendedText,
     );
     setBatchSelectorOpen(false);
+  };
+
+  const handleCopyMessage = async (messageId: string, text: string) => {
+    const copyText = text.trim();
+
+    if (!copyText) {
+      return;
+    }
+
+    await copyTextToClipboard(copyText);
+    setCopiedMessageId(messageId);
+
+    if (copyResetTimerRef.current) {
+      window.clearTimeout(copyResetTimerRef.current);
+    }
+
+    copyResetTimerRef.current = window.setTimeout(() => {
+      setCopiedMessageId(null);
+    }, 3000);
+  };
+
+  const renderCopyButton = ({
+    messageId,
+    text,
+  }: {
+    messageId: string;
+    text: string;
+  }) => {
+    const canCopy = text.trim().length > 0;
+
+    if (!canCopy) {
+      return null;
+    }
+
+    const copied = copiedMessageId === messageId;
+
+    return (
+      <Button
+        type="text"
+        size="small"
+        icon={
+          copied ? (
+            <CheckOutlined className="text-emerald-500" />
+          ) : (
+            <CopyOutlined />
+          )
+        }
+        className={`transition-opacity ${
+          copied
+            ? "opacity-100"
+            : "opacity-0 group-hover/chat-message:opacity-100 focus:opacity-100"
+        }`}
+        onClick={() => handleCopyMessage(messageId, text)}
+        aria-label={copied ? "已复制" : "复制文本"}
+      />
+    );
+  };
+
+  const renderMessageFooter = ({
+    messageId,
+    placement,
+    status,
+    text,
+  }: {
+    messageId: string;
+    placement: "start" | "end";
+    status?: React.ReactNode;
+    text: string;
+  }) => {
+    const copyButton = renderCopyButton({ messageId, text });
+
+    if (!status && !copyButton) {
+      return undefined;
+    }
+
+    return (
+      <div
+        className={`flex w-full items-center gap-2 ${
+          placement === "end" ? "justify-end" : "justify-start"
+        }`}
+      >
+        {status}
+        {copyButton}
+      </div>
+    );
   };
 
   const onSend = async (content: string) => {
@@ -246,11 +357,17 @@ const AgentChat: React.FC = () => {
     if (message.role === "user") {
       return {
         key: message.id,
+        className: "group/chat-message",
         content: (
           <div className="whitespace-pre-wrap text-[15px] leading-7">
             {message.text}
           </div>
         ),
+        footer: renderMessageFooter({
+          messageId: message.id,
+          placement: "end",
+          text: message.text,
+        }),
         role: message.role,
         placement: "end",
         variant: "filled",
@@ -259,15 +376,40 @@ const AgentChat: React.FC = () => {
 
     const assistantMessage = message as AssistantMessage;
     const hasArtifact = Object.keys(assistantMessage.artifacts).length > 0;
+    const assistantCopyText = [
+      getVisibleAssistantMarkdown(assistantMessage.markdownText),
+      assistantMessage.error ? `错误：${assistantMessage.error}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     return {
       key: message.id,
+      className: "group/chat-message",
       content: (
         <AssistantMessageContent
           message={assistantMessage}
           onOpenArtifact={handleOpenArtifact}
         />
       ),
+      footer: renderMessageFooter({
+        messageId: message.id,
+        placement: "start",
+        text: assistantCopyText,
+        status:
+          message.status === "pending" ||
+          message.status === "accepted" ||
+          message.status === "streaming" ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <LoadingOutlined />
+              <span>正在为您规划装箱方案...</span>
+            </div>
+          ) : message.status === "cancelled" ? (
+            <Text type="secondary" className="text-xs">
+              已取消本次生成
+            </Text>
+          ) : undefined,
+      }),
       role: message.role,
       placement: "start",
       loading:
@@ -276,19 +418,6 @@ const AgentChat: React.FC = () => {
         (message.status === "pending" ||
           message.status === "accepted" ||
           message.status === "streaming"),
-      footer:
-        message.status === "pending" ||
-        message.status === "accepted" ||
-        message.status === "streaming" ? (
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <LoadingOutlined />
-            <span>正在为您规划装箱方案...</span>
-          </div>
-        ) : message.status === "cancelled" ? (
-          <Text type="secondary" className="text-xs">
-            已取消本次生成
-          </Text>
-        ) : undefined,
       variant: "borderless",
     };
   });
