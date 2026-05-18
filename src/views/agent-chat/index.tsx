@@ -14,6 +14,7 @@ import { Dropdown, type MenuProps } from "antd";
 import { sendChatMessage } from "../../api/chat";
 import AssistantMessageContent, {
   getVisibleAssistantMarkdown,
+  type CargoPreviewSelection,
 } from "../../components/chat/AssistantMessageContent";
 import ShipmentBatchSelectorModal from "../../components/chat/ShipmentBatchSelectorModal";
 import type { AssistantMessage } from "../../store/useChatStore";
@@ -58,6 +59,9 @@ const AgentChat: React.FC = () => {
   const [inputValue, setInputValue] = useState("");
   const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [previewSelections, setPreviewSelections] = useState<
+    Record<string, CargoPreviewSelection>
+  >({});
   const {
     serverConversationId,
     messages,
@@ -124,9 +128,20 @@ const AgentChat: React.FC = () => {
     navigate("/cargo-3d");
   };
 
+  const handlePreviewSelectionChange = (
+    artifactId: string,
+    selection: CargoPreviewSelection,
+  ) => {
+    setPreviewSelections((current) => ({
+      ...current,
+      [artifactId]: selection,
+    }));
+  };
+
   const handleClearHistory = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    setPreviewSelections({});
     clearHistory();
   };
 
@@ -390,6 +405,8 @@ const AgentChat: React.FC = () => {
         <AssistantMessageContent
           message={assistantMessage}
           onOpenArtifact={handleOpenArtifact}
+          previewSelections={previewSelections}
+          onPreviewSelectionChange={handlePreviewSelectionChange}
         />
       ),
       footer: renderMessageFooter({

@@ -1,9 +1,15 @@
-import React, { useEffect, useMemo, useState, type ReactNode } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Button,
   Collapse,
   Empty,
-  Segmented,
+  Select,
   Tag,
   Typography,
   Tooltip,
@@ -38,6 +44,12 @@ interface CargoPackingPreviewWorkspaceProps {
   onBack?: () => void;
   backTooltip?: string;
   title?: string;
+  selectedPlanNo?: string | null;
+  selectedContainerNo?: string | null;
+  onSelectionChange?: (selection: {
+    planNo: string | null;
+    containerNo: string | null;
+  }) => void;
 }
 
 const CargoPackingPreviewWorkspace: React.FC<
@@ -50,11 +62,15 @@ const CargoPackingPreviewWorkspace: React.FC<
   onBack,
   backTooltip = "返回",
   title = "装箱三维预览",
+  selectedPlanNo,
+  selectedContainerNo,
+  onSelectionChange,
 }) => {
-  const [selectedPlanNo, setSelectedPlanNo] = useState<string | null>(null);
-  const [selectedContainerNo, setSelectedContainerNo] = useState<string | null>(
-    null,
-  );
+  const [internalSelectedPlanNo, setInternalSelectedPlanNo] = useState<
+    string | null
+  >(null);
+  const [internalSelectedContainerNo, setInternalSelectedContainerNo] =
+    useState<string | null>(null);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(
     null,
   );
@@ -63,35 +79,69 @@ const CargoPackingPreviewWorkspace: React.FC<
   const preferredPlan = artifact ? getPreferredPlan(artifact) : null;
   const preferredPlanNo = preferredPlan?.planNo ?? null;
   const preferredContainerNo = preferredPlan?.containers[0]?.containerNo ?? null;
-  const selectedPlan = artifact ? getPlanByNo(artifact, selectedPlanNo) : null;
-  const selectedContainer = getContainerByNo(selectedPlan, selectedContainerNo);
+  const currentSelectedPlanNo =
+    selectedPlanNo === undefined ? internalSelectedPlanNo : selectedPlanNo;
+  const currentSelectedContainerNo =
+    selectedContainerNo === undefined
+      ? internalSelectedContainerNo
+      : selectedContainerNo;
+  const selectedPlan = artifact
+    ? getPlanByNo(artifact, currentSelectedPlanNo)
+    : null;
+  const selectedContainer = getContainerByNo(
+    selectedPlan,
+    currentSelectedContainerNo,
+  );
   const layoutView = useMemo(
     () => createCargoLayoutView(artifact, selectedPlan, selectedContainer),
     [artifact, selectedContainer, selectedPlan],
   );
   const layoutViewId = layoutView?.id ?? null;
   const firstPlacementId = layoutView?.placements[0]?.id ?? null;
+  const updateSelection = useCallback(
+    (nextPlanNo: string | null, nextContainerNo: string | null) => {
+      setInternalSelectedPlanNo(nextPlanNo);
+      setInternalSelectedContainerNo(nextContainerNo);
+      onSelectionChange?.({
+        planNo: nextPlanNo,
+        containerNo: nextContainerNo,
+      });
+    },
+    [onSelectionChange],
+  );
 
   useEffect(() => {
     // 切换 artifact 后重置计划/箱子选择，避免还拿着上一个方案的编号。
-    setSelectedPlanNo(preferredPlanNo);
-    setSelectedContainerNo(preferredContainerNo);
-  }, [artifact, preferredContainerNo, preferredPlanNo]);
+    updateSelection(preferredPlanNo, preferredContainerNo);
+  }, [artifact, preferredContainerNo, preferredPlanNo, updateSelection]);
 
   useEffect(() => {
     // 切换计划时，如果原来的箱号不存在，自动回到该计划第一个箱子。
     if (!selectedPlan) {
-      setSelectedContainerNo(null);
+      if (currentSelectedContainerNo !== null) {
+        updateSelection(currentSelectedPlanNo, null);
+      }
       return;
     }
 
-    const currentContainer = getContainerByNo(selectedPlan, selectedContainerNo);
+    const currentContainer = getContainerByNo(
+      selectedPlan,
+      currentSelectedContainerNo,
+    );
     const nextContainerNo = currentContainer?.containerNo ?? null;
 
-    setSelectedContainerNo((current) =>
-      current === nextContainerNo ? current : nextContainerNo,
-    );
-  }, [selectedContainerNo, selectedPlan]);
+    if (
+      currentSelectedPlanNo !== selectedPlan.planNo ||
+      currentSelectedContainerNo !== nextContainerNo
+    ) {
+      updateSelection(selectedPlan.planNo, nextContainerNo);
+    }
+  }, [
+    currentSelectedContainerNo,
+    currentSelectedPlanNo,
+    selectedPlan,
+    updateSelection,
+  ]);
 
   useEffect(() => {
     // 切换箱子后默认选中第一件货物，让右侧信息卡有明确上下文。
@@ -151,9 +201,9 @@ const CargoPackingPreviewWorkspace: React.FC<
               <Text type="secondary" className="text-xs font-semibold">
                 装箱计划：
               </Text>
-              <Segmented
+              <Select
                 value={selectedPlan.planNo}
-                className="w-fit max-w-full"
+                className="min-w-[220px] max-w-full"
                 options={artifact.data.plans.map((plan) => ({
                   label: `${plan.planNo}${plan.recommended ? " 推荐" : ""}`,
                   value: plan.planNo,
@@ -162,8 +212,8 @@ const CargoPackingPreviewWorkspace: React.FC<
                   const nextPlan = artifact.data.plans.find(
                     (plan) => plan.planNo === String(value),
                   );
-                  setSelectedPlanNo(String(value));
-                  setSelectedContainerNo(
+                  updateSelection(
+                    String(value),
                     nextPlan?.containers[0]?.containerNo ?? null,
                   );
                 }}
@@ -172,16 +222,18 @@ const CargoPackingPreviewWorkspace: React.FC<
 
             <div className="space-y-2">
               <Text type="secondary" className="text-xs font-semibold">
-                货箱：
+                货柜：
               </Text>
-              <Segmented
+              <Select
                 value={selectedContainer.containerNo}
-                className="w-fit max-w-full"
+                className="min-w-[220px] max-w-full"
                 options={selectedPlan.containers.map((container) => ({
                   label: `${container.containerNo} ${container.containerType}`,
                   value: container.containerNo,
                 }))}
-                onChange={(value) => setSelectedContainerNo(String(value))}
+                onChange={(value) =>
+                  updateSelection(selectedPlan.planNo, String(value))
+                }
               />
             </div>
           </div>
