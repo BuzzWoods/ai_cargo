@@ -47,13 +47,7 @@ const isStreamingProgressLine = (line: string) => {
 
 export const getVisibleAssistantMarkdown = (markdownText: string) => {
   const lines = markdownText.split(/\r?\n/);
-  const contentLines = lines.filter((line) => {
-    if (!line.trim()) {
-      return false;
-    }
-
-    return !isStreamingProgressLine(line);
-  });
+  const contentLines = lines.filter((line) => !isStreamingProgressLine(line));
 
   return contentLines.length ? contentLines.join("\n") : markdownText;
 };
@@ -89,9 +83,9 @@ const AssistantMessageContent = ({
     return (
       <div
         key={key}
-        className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white/50 backdrop-blur-sm"
+        className="overflow-hidden border rounded-2xl border-slate-200/60 bg-white/50 backdrop-blur-sm"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 bg-slate-100/30 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200/60 bg-slate-100/30">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-slate-900">
               {artifact.title}
