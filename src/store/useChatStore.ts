@@ -297,14 +297,17 @@ const appendArtifactBlock = (
   ];
 };
 
-const normalizeCachedMessages = (messages: ChatMessage[]) =>
+const normalizeCachedMessages = (
+  messages: ChatMessage[],
+  { cancelUnfinished = true }: { cancelUnfinished?: boolean } = {},
+) =>
   messages.slice(-MAX_CACHED_MESSAGES).map((message) => {
     if (message.role === "user") {
       return message;
     }
 
     // 刷新页面后 SSE 连接已经丢失，恢复时不能继续显示“正在生成”。
-    if (isUnfinishedAssistantStatus(message.status)) {
+    if (cancelUnfinished && isUnfinishedAssistantStatus(message.status)) {
       return {
         ...message,
         status: "cancelled",
@@ -375,13 +378,14 @@ const normalizeHistoryIndex = (value: unknown): ChatHistoryIndexItem[] => {
 const normalizeHistorySession = (
   value: unknown,
   fallbackLocalConversationId: string,
+  options?: { cancelUnfinished?: boolean },
 ): ChatHistorySession => {
   const record =
     value && typeof value === "object"
       ? (value as Partial<ChatHistorySession>)
       : {};
   const messages = Array.isArray(record.messages)
-    ? normalizeCachedMessages(record.messages)
+    ? normalizeCachedMessages(record.messages, options)
     : [];
 
   return {
@@ -489,7 +493,9 @@ const persistCurrentState = (state: ChatState) => {
     localConversationId: state.activeLocalConversationId,
     serverConversationId: state.serverConversationId,
     activeArtifactId: state.activeArtifactId,
-    messages: normalizeCachedMessages(state.messages),
+    messages: normalizeCachedMessages(state.messages, {
+      cancelUnfinished: false,
+    }),
   };
   const previousLocalConversationIds = state.historyIndex.map(
     (item) => item.localConversationId,

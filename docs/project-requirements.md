@@ -298,7 +298,8 @@ Content-Type: application/json
 - 如果 URL 指定了 `conversationId`，优先加载该会话。
 - 如果没有指定 `conversationId`，加载最近一次激活会话。
 - 单个会话最多保留最近 `50` 条消息。
-- 如果恢复出的 assistant 消息处于 `pending`、`accepted`、`streaming`，统一改成 `cancelled`。
+- 只有在页面首次加载、刷新页面或手动切换历史会话时，才允许把恢复出的未完成 assistant 消息改成 `cancelled`。
+- 正常发送、HTTP accepted、SSE streaming 和实时写缓存时，必须保留 `pending`、`accepted`、`streaming` 原始状态。
 - `AgentChat` 根据恢复后的 `messages.length` 判断是否展示历史消息区域。
 
 输出：
@@ -313,6 +314,7 @@ Content-Type: application/json
 - 当前不做刷新后的 SSE 续接。
 - 当前不做服务端历史恢复。
 - localStorage 只作为前端本地历史，不作为长期业务存档。
+- URL 从本地 `localConversationId` 替换为服务端 `conversationId` 时，如果仍指向当前激活会话，不应重复从缓存加载会话。
 
 #### 节点 03：聊天空态与输入态
 
@@ -1316,6 +1318,8 @@ ID 生成职责：
 - 新开对话后，旧会话仍保留在侧边历史中。
 - 删除某条会话后，该会话不再出现在侧边历史中。
 - 单个会话最多保留最近 `50` 条消息，避免无限膨胀。
+- 正在生成时新开对话、accepted 后更新 URL，页面不应出现“页面刷新后已停止本次生成”。
+- `cancelled` 状态只展示为取消提示，不按红色错误正文展示；真正的 `message.error` 才展示错误样式。
 
 ### 9.5 多会话历史推荐方案：localStorage 分片存储
 
@@ -1372,6 +1376,8 @@ type ChatHistorySession = {
 - 创建新对话时先生成 `localConversationId`，此时 `serverConversationId` 为 `null`。
 - 首次 HTTP accepted 后，把后端返回的 `conversationId` 写入当前会话详情和索引。
 - 每次消息变化后，只更新当前会话详情和索引摘要。
+- 实时写入会话详情时必须保留消息真实状态，不允许把 `pending`、`accepted`、`streaming` 提前改成 `cancelled`。
+- 未完成消息改成 `cancelled` 只属于“恢复策略”，不属于“写入策略”。
 - 索引按 `updatedAt` 倒序展示。
 - 单会话继续沿用最近 `50` 条消息上限。
 - 建议保留最近 `20` 到 `30` 个会话；超过数量时只清理最旧的本地会话。
@@ -1380,6 +1386,7 @@ type ChatHistorySession = {
 
 - 打开 `/chat` 时读取 `ai-cargo-chat-history-active`。
 - 打开 `/chat?conversationId=xxx` 时先按 `serverConversationId` 匹配索引；匹配不到时按 `localConversationId` 匹配。
+- 如果 URL 中的 `conversationId` 等于当前激活会话的 `localConversationId` 或 `serverConversationId`，直接保持当前内存状态，不重复读取缓存。
 - 找到会话后加载对应 session，并恢复 `messages/serverConversationId/activeArtifactId`。
 - 恢复时继续把未完成 assistant 消息改为 `cancelled`。
 
@@ -1430,6 +1437,7 @@ type ChatHistorySession = {
 - 组件卸载时必须 abort 当前 SSE。
 - 新开对话或删除当前会话时必须 abort 当前 SSE。
 - SSE 在 `message.done` 前异常关闭时视为错误。
+- 持久化写入不得改变进行中消息状态；只有恢复丢失 SSE 连接的会话时才允许转为 `cancelled`。
 - `artifact.replace` 缺少 artifact 时忽略。
 - `data.plans` 不存在时不能调用 `.find` 导致崩溃。
 - localStorage 缓存只用于临时体验，不应用于长期保存敏感业务数据。

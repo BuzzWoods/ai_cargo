@@ -549,7 +549,9 @@ const AgentChat: React.FC = () => {
     const hasArtifact = Object.keys(assistantMessage.artifacts).length > 0;
     const assistantCopyText = [
       getVisibleAssistantMarkdown(assistantMessage.markdownText),
-      assistantMessage.error ? `错误：${assistantMessage.error}` : "",
+      assistantMessage.status === "error" && assistantMessage.error
+        ? `错误：${assistantMessage.error}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n");

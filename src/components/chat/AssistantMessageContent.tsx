@@ -211,7 +211,7 @@ const AssistantMessageContent = ({
         </Text>
       )}
 
-      {message.error ? (
+      {message.status === "error" && message.error ? (
         <Text type="danger" className="chat-error-text">
           {message.error}
         </Text>

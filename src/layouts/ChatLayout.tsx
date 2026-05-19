@@ -55,6 +55,14 @@ const ChatLayout: React.FC = () => {
     );
 
     if (conversationId) {
+      const state = useChatStore.getState();
+      if (
+        conversationId === state.activeLocalConversationId ||
+        conversationId === state.serverConversationId
+      ) {
+        return;
+      }
+
       loadConversation(conversationId);
     }
   }, [loadConversation, location.pathname, location.search]);
