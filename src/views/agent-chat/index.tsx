@@ -604,7 +604,7 @@ const AgentChat: React.FC = () => {
     return (
       <div className="space-y-4">
         <Sender
-          placeholder="给小柜发消息"
+          placeholder="AI智能排柜，极智空间，装载无限——AI如是说"
           value={inputValue}
           onChange={setInputValue}
           onSubmit={handleSend}
