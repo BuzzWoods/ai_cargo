@@ -1,12 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
-import { App as AntdApp, Typography, Button } from "antd";
+import {
+  Bubble,
+  Prompts,
+  Sender,
+  Welcome,
+  type BubbleItemType,
+} from "@ant-design/x";
+import { Typography, Button } from "antd";
 import {
   ArrowDownOutlined,
   CheckOutlined,
   CopyOutlined,
   LoadingOutlined,
-  PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { sendChatMessage } from "../../api/chat";
@@ -19,6 +24,27 @@ import type { AssistantMessage } from "../../store/useChatStore";
 import { useChatStore } from "../../store/useChatStore";
 
 const { Text } = Typography;
+
+const promptSuggestions = [
+  {
+    key: "smart-cargo",
+    icon: "✦",
+    label: "我要智能分柜",
+    value: "我要智能分柜",
+    className: "w-[112px]",
+  },
+  {
+    key: "shipment-template",
+    icon: "✎",
+    label:
+      "计划出货批次单号： Sku信息： 柜子： 策略：同仓优先、重货先装并放底层",
+    value: `计划出货批次单号：
+Sku信息：
+柜子：
+策略：同仓优先、重货先装并放底层`,
+    className: "max-w-full md:max-w-[520px]",
+  },
+];
 
 const copyTextToClipboard = async (text: string) => {
   if (navigator.clipboard?.writeText) {
@@ -51,7 +77,6 @@ const getErrorMessage = (error: unknown) => {
 
 const AgentChat: React.FC = () => {
   const navigate = useNavigate();
-  const { message: antdMessage } = AntdApp.useApp();
   // 当前只允许一个流式请求在跑；切换会话/卸载时会 abort 这条请求。
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeConversationRef = useRef<string | null>(null);
@@ -67,8 +92,6 @@ const AgentChat: React.FC = () => {
   const [previewSelections, setPreviewSelections] = useState<
     Record<string, CargoPreviewSelection>
   >({});
-  const [isStartingNewConversation, setIsStartingNewConversation] =
-    useState(false);
   const {
     serverConversationId,
     activeLocalConversationId,
@@ -84,7 +107,6 @@ const AgentChat: React.FC = () => {
     failAssistantMessage,
     cancelAssistantMessage,
     setActiveArtifactId,
-    createNewConversation,
   } = useChatStore();
 
   const [isExiting, setIsExiting] = useState(false);
@@ -101,10 +123,6 @@ const AgentChat: React.FC = () => {
   }, [messages.length, isExiting]);
 
   const handleSend = async (content: string) => {
-    if (isStartingNewConversation) {
-      return;
-    }
-
     if (messages.length === 0) {
       setIsExiting(true);
       // 等待动画进行一半左右再触发请求，增强衔接感
@@ -265,22 +283,6 @@ const AgentChat: React.FC = () => {
     }));
   };
 
-  const handleStartNewConversation = () => {
-    if (isStartingNewConversation) {
-      return;
-    }
-
-    resetConversationUiState();
-    setIsStartingNewConversation(true);
-
-    const localConversationId = createNewConversation();
-    navigate(`/chat?conversationId=${encodeURIComponent(localConversationId)}`);
-    antdMessage.success("已开启新对话");
-    window.setTimeout(() => {
-      setIsStartingNewConversation(false);
-    }, 120);
-  };
-
   const handleAppendShipmentBatchNos = (batchPlanNos: string[]) => {
     if (!batchPlanNos.length) {
       return;
@@ -383,7 +385,7 @@ const AgentChat: React.FC = () => {
 
   const onSend = async (content: string) => {
     const trimmedContent = content.trim();
-    if (!trimmedContent || isStreaming || isStartingNewConversation) {
+    if (!trimmedContent || isStreaming) {
       return;
     }
 
@@ -599,27 +601,54 @@ const AgentChat: React.FC = () => {
 
   const renderSender = () => {
     return (
-      <Sender
-        value={inputValue}
-        onChange={setInputValue}
-        onSubmit={handleSend}
-        placeholder="描述您的装箱需求，例如：100个纸箱如何装进 20GP 集装箱？"
-        prefix={
-          <div className="flex items-center gap-1">
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              loading={isStartingNewConversation}
-              onClick={handleStartNewConversation}
-            >
-              开启新对话
-            </Button>
-          </div>
-        }
-        disabled={isStartingNewConversation}
-        loading={isStreaming || isStartingNewConversation}
-      />
+      <div className="space-y-4">
+        <Sender
+          value={inputValue}
+          onChange={setInputValue}
+          onSubmit={handleSend}
+          loading={isStreaming}
+        />
+        <Prompts
+          rootClassName="chat-prompt-suggestions"
+          wrap
+          items={promptSuggestions.map((prompt) => ({
+            key: prompt.key,
+            label: (
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="chat-prompt-icon" aria-hidden="true">
+                  {prompt.icon}
+                </span>
+                <span
+                  className={`block truncate text-xs leading-5 text-slate-500 ${prompt.className}`}
+                >
+                  {prompt.label}
+                </span>
+              </span>
+            ),
+          }))}
+          classNames={{
+            item: "chat-prompt-item",
+          }}
+          styles={{
+            item: {
+              background: "transparent",
+              borderColor: "rgba(148, 163, 184, 0.42)",
+              borderRadius: 6,
+              paddingBlock: 10,
+              paddingInline: 14,
+            },
+          }}
+          onItemClick={({ data }) => {
+            const selectedPrompt = promptSuggestions.find(
+              (prompt) => prompt.key === data.key,
+            );
+
+            if (selectedPrompt) {
+              setInputValue(selectedPrompt.value);
+            }
+          }}
+        />
+      </div>
     );
   };
 

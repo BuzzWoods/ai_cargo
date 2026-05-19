@@ -12,7 +12,7 @@
 - `/cargo-3d`：完整 3D 装箱页，从聊天 store 里读取已生成的 artifact。
 - `/3d-preview`：后端调试页，手动粘贴 artifact JSON 后直接渲染 3D。
 
-布局在 `src/layouts/ChatLayout.tsx`，左侧菜单只负责路由跳转，页面状态不放在布局里。
+布局在 `src/layouts/ChatLayout.tsx`，自研侧栏在 `src/layouts/AppSidebar.tsx`。侧栏负责折叠/展开、路由跳转、会话历史切换和本地删除；聊天 SSE 与 3D 页面状态仍留在各自 view/store 中。
 
 ## 2. 聊天发送和接收流程
 
@@ -128,4 +128,3 @@ Markdown 渲染使用：
 - 直接粘贴 artifact.data。
 
 页面只做外层包装归一化，不修改 `data.plans` 里的业务内容，然后交给和 `/cargo-3d` 一样的工作台渲染。
-
