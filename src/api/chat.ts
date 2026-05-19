@@ -25,6 +25,10 @@ interface SendChatMessageOptions {
   onEvent: (event: ChatStreamEvent) => void;
 }
 
+interface StartCargoPackingConversationOptions {
+  signal?: AbortSignal;
+}
+
 interface ParsedStreamEventShape {
   type: StreamEventType;
   eventId: string;
@@ -227,3 +231,16 @@ export const sendChatMessage = async ({
 
   return acceptedResponse;
 };
+
+export const startCargoPackingConversation = async ({
+  signal,
+}: StartCargoPackingConversationOptions = {}) =>
+  postChatMessage(
+    {
+      text: "开始新的智能分柜",
+      context: {
+        bizType: "cargo_packing",
+      },
+    },
+    signal,
+  );

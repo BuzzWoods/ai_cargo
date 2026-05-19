@@ -172,8 +172,8 @@ export interface ChatInputFileRef {
 
 // 前端发消息时只提交自然语言、会话 id 和可选文件；3D 结构由后端/AI 通过 artifact 返回。
 export interface ChatPostRequest {
-  conversationId: string | null;
-  clientMessageId: string;
+  conversationId?: string | null;
+  clientMessageId?: string;
   text: string;
   files?: ChatInputFileRef[];
   context?: {

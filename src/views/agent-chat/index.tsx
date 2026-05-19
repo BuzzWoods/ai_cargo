@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
-import { Typography, Button } from "antd";
+import { Typography, Button, message as antdMessage } from "antd";
 import {
   ArrowDownOutlined,
   CheckOutlined,
@@ -8,10 +8,11 @@ import {
   DeleteOutlined,
   LoadingOutlined,
   MoreOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { Dropdown, type MenuProps } from "antd";
-import { sendChatMessage } from "../../api/chat";
+import { sendChatMessage, startCargoPackingConversation } from "../../api/chat";
 import AssistantMessageContent, {
   getVisibleAssistantMarkdown,
   type CargoPreviewSelection,
@@ -67,6 +68,8 @@ const AgentChat: React.FC = () => {
   const [previewSelections, setPreviewSelections] = useState<
     Record<string, CargoPreviewSelection>
   >({});
+  const [isStartingNewConversation, setIsStartingNewConversation] =
+    useState(false);
   const {
     serverConversationId,
     messages,
@@ -98,6 +101,10 @@ const AgentChat: React.FC = () => {
   }, [messages.length, isExiting]);
 
   const handleSend = async (content: string) => {
+    if (isStartingNewConversation) {
+      return;
+    }
+
     if (messages.length === 0) {
       setIsExiting(true);
       // 等待动画进行一半左右再触发请求，增强衔接感
@@ -117,6 +124,18 @@ const AgentChat: React.FC = () => {
         message.status === "accepted" ||
         message.status === "streaming"),
   );
+
+  const resetCurrentConversation = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+    setPreviewSelections({});
+    setInputValue("");
+    setCopiedMessageId(null);
+    clearHistory();
+    useChatStore.persist.clearStorage();
+  };
 
   const isNearScrollBottom = (element: HTMLDivElement) =>
     element.scrollHeight - element.scrollTop - element.clientHeight < 120;
@@ -237,12 +256,36 @@ const AgentChat: React.FC = () => {
   };
 
   const handleClearHistory = () => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    stickToBottomRef.current = true;
-    setShowScrollToBottom(false);
-    setPreviewSelections({});
-    clearHistory();
+    resetCurrentConversation();
+  };
+
+  const handleStartNewConversation = async () => {
+    if (isStartingNewConversation) {
+      return;
+    }
+
+    resetCurrentConversation();
+    setIsStartingNewConversation(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await startCargoPackingConversation({
+        signal: controller.signal,
+      });
+      bindServerConversationId(response.conversationId);
+      antdMessage.success("已开启新对话");
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        antdMessage.error(getErrorMessage(error));
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsStartingNewConversation(false);
+    }
   };
 
   const handleAppendShipmentBatchNos = (batchPlanNos: string[]) => {
@@ -347,7 +390,7 @@ const AgentChat: React.FC = () => {
 
   const onSend = async (content: string) => {
     const trimmedContent = content.trim();
-    if (!trimmedContent || isStreaming) {
+    if (!trimmedContent || isStreaming || isStartingNewConversation) {
       return;
     }
 
@@ -561,14 +604,24 @@ const AgentChat: React.FC = () => {
         onChange={setInputValue}
         onSubmit={handleSend}
         placeholder="描述您的装箱需求，例如：100个纸箱如何装进 20GP 集装箱？"
-        loading={isStreaming}
         prefix={
           <div className="flex items-center gap-1">
             <Dropdown menu={{ items }} placement="topLeft">
               <Button type="text" icon={<MoreOutlined />} />
             </Dropdown>
+            <Button
+              type="text"
+              size="small"
+              icon={<PlusOutlined />}
+              loading={isStartingNewConversation}
+              onClick={handleStartNewConversation}
+            >
+              开启新对话
+            </Button>
           </div>
         }
+        disabled={isStartingNewConversation}
+        loading={isStreaming || isStartingNewConversation}
       />
     );
   };
