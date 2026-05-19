@@ -28,21 +28,21 @@ const { Text } = Typography;
 const promptSuggestions = [
   {
     key: "smart-cargo",
-    icon: "✦",
+    icon: "✨",
     label: "我要智能分柜",
     value: "我要智能分柜",
-    className: "w-[112px]",
+    className: "w-auto",
   },
   {
     key: "shipment-template",
-    icon: "✎",
+    icon: "📝",
     label:
       "计划出货批次单号： Sku信息： 柜子： 策略：同仓优先、重货先装并放底层",
     value: `计划出货批次单号：
 Sku信息：
 柜子：
 策略：同仓优先、重货先装并放底层`,
-    className: "max-w-full md:max-w-[520px]",
+    className: "max-w-full md:max-w-[460px]",
   },
 ];
 
@@ -291,9 +291,7 @@ const AgentChat: React.FC = () => {
     const appendedText = `出货批次编号：${batchPlanNos.join("、")}`;
 
     setInputValue((current) =>
-      current.trim()
-        ? `${current.trimEnd()}\n${appendedText}`
-        : appendedText,
+      current.trim() ? `${current.trimEnd()}\n${appendedText}` : appendedText,
     );
     setBatchSelectorOpen(false);
   };
@@ -437,9 +435,12 @@ const AgentChat: React.FC = () => {
           // HTTP accepted 只说明任务进入后端队列，UI 先进入 accepted 状态等待 SSE。
           currentServerRequestId = response.requestId;
           bindServerConversationId(response.conversationId);
-          navigate(`/chat?conversationId=${encodeURIComponent(response.conversationId)}`, {
-            replace: true,
-          });
+          navigate(
+            `/chat?conversationId=${encodeURIComponent(response.conversationId)}`,
+            {
+              replace: true,
+            },
+          );
           bindUserServerConversationId(
             localUserMessageId,
             response.conversationId,
@@ -603,51 +604,58 @@ const AgentChat: React.FC = () => {
     return (
       <div className="space-y-4">
         <Sender
+          placeholder="给小柜发消息"
           value={inputValue}
           onChange={setInputValue}
           onSubmit={handleSend}
           loading={isStreaming}
         />
-        <Prompts
-          rootClassName="chat-prompt-suggestions"
-          wrap
-          items={promptSuggestions.map((prompt) => ({
-            key: prompt.key,
-            label: (
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="chat-prompt-icon" aria-hidden="true">
-                  {prompt.icon}
+        {messages.length === 0 && (
+          <Prompts
+            rootClassName="chat-prompt-suggestions"
+            wrap
+            items={promptSuggestions.map((prompt) => ({
+              key: prompt.key,
+              label: (
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="chat-prompt-icon" aria-hidden="true">
+                    {prompt.icon}
+                  </span>
+                  <span
+                    className={`block truncate text-xs leading-5 text-slate-500 ${prompt.className}`}
+                  >
+                    {prompt.label}
+                  </span>
                 </span>
-                <span
-                  className={`block truncate text-xs leading-5 text-slate-500 ${prompt.className}`}
-                >
-                  {prompt.label}
-                </span>
-              </span>
-            ),
-          }))}
-          classNames={{
-            item: "chat-prompt-item",
-          }}
-          styles={{
-            item: {
-              background: "transparent",
-              borderColor: "rgba(148, 163, 184, 0.42)",
-              borderRadius: 6,
-              paddingBlock: 10,
-              paddingInline: 14,
-            },
-          }}
-          onItemClick={({ data }) => {
-            const selectedPrompt = promptSuggestions.find(
-              (prompt) => prompt.key === data.key,
-            );
+              ),
+            }))}
+            classNames={{
+              item: "chat-prompt-item",
+            }}
+            styles={{
+              item: {
+                background: "rgba(255, 255, 255, 0.4)",
+                borderColor: "rgba(0, 0, 0, 0.06)",
+                borderRadius: 12,
+                paddingBlock: 12,
+                paddingInline: 16,
+              },
+            }}
+            onItemClick={({ data }) => {
+              const selectedPrompt = promptSuggestions.find(
+                (prompt) => prompt.key === data.key,
+              );
 
-            if (selectedPrompt) {
-              setInputValue(selectedPrompt.value);
-            }
-          }}
-        />
+              if (selectedPrompt) {
+                setInputValue((prev) =>
+                  prev.trim()
+                    ? `${prev.trimEnd()}\n${selectedPrompt.value}`
+                    : selectedPrompt.value,
+                );
+              }
+            }}
+          />
+        )}
       </div>
     );
   };

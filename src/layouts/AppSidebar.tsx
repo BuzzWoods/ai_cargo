@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { App as AntdApp, Tooltip } from "antd";
+import { App as AntdApp, Tooltip, Popover } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -120,14 +120,75 @@ const AppSidebar: React.FC = () => {
       </button>
     );
 
-    return collapsed ? (
-      <Tooltip title={label} placement="right">
+    return (
+      <Tooltip title={collapsed ? label : ""} placement="right">
         {item}
       </Tooltip>
-    ) : (
-      item
     );
   };
+
+  const renderHistoryContent = (isPopover = false) => (
+    <div className={`app-sidebar-history ${isPopover ? 'popover-history' : ''}`}>
+      {historyIndex.length ? (
+        historyIndex.map((item) => {
+          const active =
+            item.localConversationId === activeLocalConversationId;
+          const routeConversationId =
+            item.serverConversationId ?? item.localConversationId;
+
+          const openConversation = () =>
+            handleOpenConversation(
+              item.localConversationId,
+              routeConversationId,
+            );
+
+          return (
+            <div
+              key={item.localConversationId}
+              role="button"
+              tabIndex={0}
+              className={`app-sidebar-history-item ${
+                active ? "app-sidebar-history-item-active" : ""
+              }`}
+              onClick={openConversation}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openConversation();
+                }
+              }}
+            >
+              <span className="app-sidebar-history-title">
+                {item.title}
+              </span>
+              <Tooltip title="删除会话" placement="right">
+                <span
+                  className="app-sidebar-history-delete-wrap"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="app-sidebar-history-delete"
+                    onClick={(event) =>
+                      handleDeleteConversation(
+                        event,
+                        item.localConversationId,
+                      )
+                    }
+                    aria-label={`删除会话：${item.title}`}
+                  >
+                    <Trash2 size={14} strokeWidth={1.9} />
+                  </button>
+                </span>
+              </Tooltip>
+            </div>
+          );
+        })
+      ) : (
+        <div className="app-sidebar-history-empty">暂无历史</div>
+      )}
+    </div>
+  );
 
   return (
     <aside
@@ -158,81 +219,40 @@ const AppSidebar: React.FC = () => {
         })}
 
         <div className="app-sidebar-chat-group">
-          {renderItem({
-            active: isChatRoute,
-            icon: <MessageSquare size={18} strokeWidth={1.9} />,
-            label: "AI Chat",
-            onClick: () => navigateToActiveConversation(),
-          })}
-
-          {!collapsed ? (
-            <div className="app-sidebar-history">
-              {historyIndex.length ? (
-                historyIndex.map((item) => {
-                  const active =
-                    item.localConversationId === activeLocalConversationId;
-                  const routeConversationId =
-                    item.serverConversationId ?? item.localConversationId;
-
-                  const openConversation = () =>
-                    handleOpenConversation(
-                      item.localConversationId,
-                      routeConversationId,
-                    );
-
-                  return (
-                    <div
-                      key={item.localConversationId}
-                      role="button"
-                      tabIndex={0}
-                      className={`app-sidebar-history-item ${
-                        active ? "app-sidebar-history-item-active" : ""
-                      }`}
-                      onClick={openConversation}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openConversation();
-                        }
-                      }}
-                    >
-                      <span className="app-sidebar-history-title">
-                        {item.title}
-                      </span>
-                      <Tooltip title="删除会话" placement="right">
-                        <span
-                          className="app-sidebar-history-delete-wrap"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="app-sidebar-history-delete"
-                            onClick={(event) =>
-                              handleDeleteConversation(
-                                event,
-                                item.localConversationId,
-                              )
-                            }
-                            aria-label={`删除会话：${item.title}`}
-                          >
-                            <Trash2 size={14} strokeWidth={1.9} />
-                          </button>
-                        </span>
-                      </Tooltip>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="app-sidebar-history-empty">暂无历史</div>
-              )}
-            </div>
-          ) : null}
+          {collapsed ? (
+            <Popover
+              placement="rightTop"
+              content={renderHistoryContent(true)}
+              trigger="click"
+              arrow={false}
+              overlayInnerStyle={{ padding: '8px' }}
+            >
+              <div>
+                {renderItem({
+                  active: isChatRoute,
+                  icon: <MessageSquare size={18} strokeWidth={1.9} />,
+                  label: "对话历史",
+                  onClick: () => navigateToActiveConversation(),
+                })}
+              </div>
+            </Popover>
+          ) : (
+            <>
+              {renderItem({
+                active: isChatRoute,
+                icon: <MessageSquare size={18} strokeWidth={1.9} />,
+                label: "对话历史",
+                onClick: () => navigateToActiveConversation(),
+              })}
+              {renderHistoryContent(false)}
+            </>
+          )}
         </div>
 
         {renderItem({
           active: isCargoRoute,
           icon: <Box size={18} strokeWidth={1.9} />,
-          label: "3D View",
+          label: "3D 视图",
           onClick: () => navigate("/cargo-3d"),
         })}
       </nav>
