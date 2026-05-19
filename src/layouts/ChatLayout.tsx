@@ -1,32 +1,180 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import React from "react";
-import { Layout, Menu, Tooltip } from "antd";
-import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
-import { menuItems } from "./menuConfig";
+import React, { useEffect, useMemo } from "react";
+import { App as AntdApp, Layout, Menu, Tooltip, Button } from "antd";
+import type { MenuProps } from "antd";
+import {
+  DeleteOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+} from "@ant-design/icons";
+import { Box, MessageSquare } from "lucide-react";
+import { useChatStore } from "../store/useChatStore";
 
 const { Header, Sider, Content } = Layout;
 
+const CHAT_ROOT_KEY = "chat-root";
+const CARGO_3D_KEY = "cargo-3d";
+const HISTORY_KEY_PREFIX = "chat-history:";
+
+const getHistoryMenuKey = (localConversationId: string) =>
+  `${HISTORY_KEY_PREFIX}${localConversationId}`;
+
 const ChatLayout: React.FC = () => {
   const [collapsed, setCollapsed] = React.useState(true);
+  const [openKeys, setOpenKeys] = React.useState<string[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
+  const { message: antdMessage } = AntdApp.useApp();
+  const {
+    activeLocalConversationId,
+    historyIndex,
+    loadConversation,
+    deleteConversation,
+  } = useChatStore();
 
-  // 左侧菜单只负责切路由，具体页面状态都留给各自 view/store 管理。
-  const handleMenuClick = ({ key }: { key: string }) => {
-    const item = menuItems.find((i) => i?.key === key);
-    if (item?.path) {
-      navigate(item.path);
+  const navigateToActiveConversation = React.useCallback(
+    (replace = false) => {
+      const state = useChatStore.getState();
+      const conversationId =
+        state.serverConversationId ?? state.activeLocalConversationId;
+
+      navigate(`/chat?conversationId=${encodeURIComponent(conversationId)}`, {
+        replace,
+      });
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    if (!location.pathname.startsWith("/chat")) {
+      return;
+    }
+
+    const conversationId = new URLSearchParams(location.search).get(
+      "conversationId",
+    );
+
+    if (conversationId) {
+      loadConversation(conversationId);
+    }
+  }, [loadConversation, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (collapsed || !location.pathname.startsWith("/chat")) {
+      return;
+    }
+
+    setOpenKeys([CHAT_ROOT_KEY]);
+  }, [collapsed, location.pathname]);
+
+  const menuItems = useMemo<MenuProps["items"]>(() => {
+    const historyChildren: MenuProps["items"] = historyIndex.map((item) => ({
+      key: getHistoryMenuKey(item.localConversationId),
+      label: (
+        <div className="group/chat-history-menu flex min-w-0 items-center justify-between gap-2">
+          <span className="min-w-0 flex-1 truncate" title={item.title}>
+            {item.title}
+          </span>
+          <Tooltip title="删除会话" placement="right">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              className="shrink-0 opacity-0 transition-opacity group-hover/chat-history-menu:opacity-100 focus:opacity-100"
+              aria-label={`删除会话：${item.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                deleteConversation(item.localConversationId);
+                navigateToActiveConversation(true);
+                antdMessage.success("已删除会话");
+              }}
+            />
+          </Tooltip>
+        </div>
+      ),
+    }));
+
+    return [
+      {
+        key: CHAT_ROOT_KEY,
+        icon: <MessageSquare size={18} className="menu-icon" />,
+        label: (
+          <span
+            onClick={(event) => {
+              event.stopPropagation();
+              navigateToActiveConversation();
+            }}
+          >
+            AI Chat
+          </span>
+        ),
+        children: historyChildren.length
+          ? historyChildren
+          : [
+              {
+                key: "chat-empty",
+                label: <span className="text-slate-400">暂无历史</span>,
+                disabled: true,
+              },
+            ],
+      },
+      {
+        key: CARGO_3D_KEY,
+        icon: <Box size={18} className="menu-icon" />,
+        label: "3D View",
+      },
+    ];
+  }, [
+    antdMessage,
+    deleteConversation,
+    historyIndex,
+    navigateToActiveConversation,
+  ]);
+
+  // 左侧菜单只负责切路由和切会话，具体页面状态都留给 view/store 管理。
+  const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
+    if (key === CARGO_3D_KEY) {
+      navigate("/cargo-3d");
+      return;
+    }
+
+    if (key.startsWith(HISTORY_KEY_PREFIX)) {
+      const localConversationId = key.slice(HISTORY_KEY_PREFIX.length);
+      const item = historyIndex.find(
+        (historyItem) =>
+          historyItem.localConversationId === localConversationId,
+      );
+
+      if (!item) {
+        return;
+      }
+
+      loadConversation(localConversationId);
+      navigate(
+        `/chat?conversationId=${encodeURIComponent(
+          item.serverConversationId ?? item.localConversationId,
+        )}`,
+      );
     }
   };
 
-  // 根据当前路径匹配菜单高亮状态
-  const activeItem = menuItems.find((i) => {
-    if (i?.path === "/") {
-      return location.pathname === "/" || location.pathname === "/chat";
+  const selectedKeys = (() => {
+    if (location.pathname.startsWith("/cargo-3d")) {
+      return [CARGO_3D_KEY];
     }
-    return location.pathname.startsWith(i?.path as string);
-  });
-  const activeKey = activeItem ? (activeItem.key as string) : "1";
+
+    if (location.pathname.startsWith("/chat")) {
+      const hasActiveHistory = historyIndex.some(
+        (item) => item.localConversationId === activeLocalConversationId,
+      );
+      return hasActiveHistory
+        ? [getHistoryMenuKey(activeLocalConversationId)]
+        : [CHAT_ROOT_KEY];
+    }
+
+    return [];
+  })();
 
   return (
     <Layout
@@ -67,15 +215,22 @@ const ChatLayout: React.FC = () => {
           theme="light"
           mode="inline"
           inlineCollapsed={collapsed}
-          inlineIndent={24}
-          selectedKeys={[activeKey]}
+          inlineIndent={16}
+          selectedKeys={selectedKeys}
+          openKeys={collapsed ? [] : openKeys}
           items={menuItems}
           onClick={handleMenuClick}
+          onOpenChange={(keys) => setOpenKeys(keys)}
         />
       </Sider>
       <Layout style={{ background: "transparent" }}>
         <Header
-          style={{ padding: 0, background: "transparent", height: "48px", lineHeight: "48px" }}
+          style={{
+            padding: 0,
+            background: "transparent",
+            height: "48px",
+            lineHeight: "48px",
+          }}
           className="flex items-center justify-between px-4 z-10"
         >
           <div className="font-bold text-lg ml-6">智慧小柜</div>

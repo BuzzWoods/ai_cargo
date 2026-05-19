@@ -1,18 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
-import { Typography, Button, message as antdMessage } from "antd";
+import { App as AntdApp, Typography, Button } from "antd";
 import {
   ArrowDownOutlined,
   CheckOutlined,
   CopyOutlined,
-  DeleteOutlined,
   LoadingOutlined,
-  MoreOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { Dropdown, type MenuProps } from "antd";
-import { sendChatMessage, startCargoPackingConversation } from "../../api/chat";
+import { sendChatMessage } from "../../api/chat";
 import AssistantMessageContent, {
   getVisibleAssistantMarkdown,
   type CargoPreviewSelection,
@@ -54,8 +51,10 @@ const getErrorMessage = (error: unknown) => {
 
 const AgentChat: React.FC = () => {
   const navigate = useNavigate();
-  // 当前只允许一个流式请求在跑；切换页面/清空历史时会 abort 这条请求。
+  const { message: antdMessage } = AntdApp.useApp();
+  // 当前只允许一个流式请求在跑；切换会话/卸载时会 abort 这条请求。
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeConversationRef = useRef<string | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
   const historyScrollRef = useRef<HTMLDivElement | null>(null);
   const programmaticScrollFrameRef = useRef<number | null>(null);
@@ -72,6 +71,7 @@ const AgentChat: React.FC = () => {
     useState(false);
   const {
     serverConversationId,
+    activeLocalConversationId,
     messages,
     addUserMessage,
     addAssistantPlaceholder,
@@ -84,7 +84,7 @@ const AgentChat: React.FC = () => {
     failAssistantMessage,
     cancelAssistantMessage,
     setActiveArtifactId,
-    clearHistory,
+    createNewConversation,
   } = useChatStore();
 
   const [isExiting, setIsExiting] = useState(false);
@@ -125,7 +125,7 @@ const AgentChat: React.FC = () => {
         message.status === "streaming"),
   );
 
-  const resetCurrentConversation = () => {
+  const resetConversationUiState = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     stickToBottomRef.current = true;
@@ -133,8 +133,6 @@ const AgentChat: React.FC = () => {
     setPreviewSelections({});
     setInputValue("");
     setCopiedMessageId(null);
-    clearHistory();
-    useChatStore.persist.clearStorage();
   };
 
   const isNearScrollBottom = (element: HTMLDivElement) =>
@@ -230,6 +228,18 @@ const AgentChat: React.FC = () => {
   }, [messages, showHistory]);
 
   useEffect(() => {
+    if (activeConversationRef.current === null) {
+      activeConversationRef.current = activeLocalConversationId;
+      return;
+    }
+
+    if (activeConversationRef.current !== activeLocalConversationId) {
+      resetConversationUiState();
+      activeConversationRef.current = activeLocalConversationId;
+    }
+  }, [activeLocalConversationId]);
+
+  useEffect(() => {
     // 组件卸载时关闭 SSE，防止后台连接继续写入已卸载的页面。
     return () => {
       abortControllerRef.current?.abort();
@@ -255,37 +265,20 @@ const AgentChat: React.FC = () => {
     }));
   };
 
-  const handleClearHistory = () => {
-    resetCurrentConversation();
-  };
-
-  const handleStartNewConversation = async () => {
+  const handleStartNewConversation = () => {
     if (isStartingNewConversation) {
       return;
     }
 
-    resetCurrentConversation();
+    resetConversationUiState();
     setIsStartingNewConversation(true);
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const response = await startCargoPackingConversation({
-        signal: controller.signal,
-      });
-      bindServerConversationId(response.conversationId);
-      antdMessage.success("已开启新对话");
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        antdMessage.error(getErrorMessage(error));
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
+    const localConversationId = createNewConversation();
+    navigate(`/chat?conversationId=${encodeURIComponent(localConversationId)}`);
+    antdMessage.success("已开启新对话");
+    window.setTimeout(() => {
       setIsStartingNewConversation(false);
-    }
+    }, 120);
   };
 
   const handleAppendShipmentBatchNos = (batchPlanNos: string[]) => {
@@ -398,6 +391,8 @@ const AgentChat: React.FC = () => {
     const { localId: localUserMessageId, clientMessageId } =
       addUserMessage(trimmedContent);
     const localAssistantMessageId = addAssistantPlaceholder();
+    const localConversationIdAtSend =
+      useChatStore.getState().activeLocalConversationId;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     stickToBottomRef.current = true;
@@ -405,6 +400,9 @@ const AgentChat: React.FC = () => {
     setInputValue("");
     let currentServerRequestId: string | undefined;
     let currentServerMessageId: string | undefined;
+    const isCurrentConversationActive = () =>
+      useChatStore.getState().activeLocalConversationId ===
+      localConversationIdAtSend;
     // accepted/start/delta 都可能携带服务端 id；这里统一把本地气泡和服务端消息绑定起来。
     const ensureAssistantServerBinding = (event: {
       requestId: string;
@@ -430,9 +428,16 @@ const AgentChat: React.FC = () => {
         text: trimmedContent,
         signal: controller.signal,
         onAccepted: (response) => {
+          if (!isCurrentConversationActive()) {
+            return;
+          }
+
           // HTTP accepted 只说明任务进入后端队列，UI 先进入 accepted 状态等待 SSE。
           currentServerRequestId = response.requestId;
           bindServerConversationId(response.conversationId);
+          navigate(`/chat?conversationId=${encodeURIComponent(response.conversationId)}`, {
+            replace: true,
+          });
           bindUserServerConversationId(
             localUserMessageId,
             response.conversationId,
@@ -443,6 +448,10 @@ const AgentChat: React.FC = () => {
           });
         },
         onEvent: (event) => {
+          if (!isCurrentConversationActive()) {
+            return;
+          }
+
           // 防御：如果旧请求/重连事件混进来，不写入当前 assistant 气泡。
           if (
             currentServerRequestId &&
@@ -587,17 +596,6 @@ const AgentChat: React.FC = () => {
   });
 
   const renderSender = () => {
-    // Sender 左侧按钮：业务单号弹窗用于把后端批次号快速追加到自然语言输入框。
-    const items: MenuProps["items"] = [
-      {
-        key: "clear",
-        label: "清除历史",
-        danger: true,
-        icon: <DeleteOutlined />,
-        onClick: handleClearHistory,
-      },
-    ];
-
     return (
       <Sender
         value={inputValue}
@@ -606,9 +604,6 @@ const AgentChat: React.FC = () => {
         placeholder="描述您的装箱需求，例如：100个纸箱如何装进 20GP 集装箱？"
         prefix={
           <div className="flex items-center gap-1">
-            <Dropdown menu={{ items }} placement="topLeft">
-              <Button type="text" icon={<MoreOutlined />} />
-            </Dropdown>
             <Button
               type="text"
               size="small"

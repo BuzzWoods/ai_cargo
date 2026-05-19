@@ -78,7 +78,8 @@
 - 展示欢迎态。
 - 用户输入自然语言后发起装柜请求。
 - 请求中途禁止重复发送新消息。
-- 支持清除历史。
+- 支持新开对话。
+- 支持侧边对话历史。
 - 支持打开业务单号选择弹窗。
 - 接收 SSE 后增量渲染 assistant 回复。
 - assistant 消息支持 Markdown 文本和 3D 小预览卡片。
@@ -93,6 +94,47 @@
 - SSE `artifact.replace` 到达后保存 artifact。
 - SSE `message.done` 到达后结束 loading。
 - SSE `message.error` 或请求异常时展示错误。
+
+### 3.1.1 侧边对话历史产品原型
+
+目标：
+
+- 在左侧导航的 `/chat` 菜单下展示本地对话历史二级菜单。
+- 一个对话对应一个 `conversationId`。
+- 点击某个二级菜单后切换到对应会话，聊天区恢复该会话的消息、`serverConversationId` 和 `activeArtifactId`。
+- 每条会话历史可单独删除。
+- “开启新对话”不再清空全部历史，而是创建一个新的空会话并切换过去。
+
+侧边菜单形态：
+
+- 一级菜单仍为 `AI Chat`。
+- `AI Chat` 展开后展示最近会话列表。
+- 会话标题优先取第一条用户消息的前 `20` 个字符。
+- 如果还没有用户消息，标题显示 `新对话`。
+- 当前激活会话高亮。
+- 每条会话右侧提供删除入口。
+- 删除当前会话后，优先切换到最近一条剩余会话；如果没有剩余会话，则自动创建一个空会话。
+
+推荐交互：
+
+- 点击 `AI Chat` 一级菜单进入 `/chat`，并保持当前激活会话。
+- 点击二级会话菜单进入 `/chat?conversationId=xxx`，同时加载对应本地历史。
+- 点击输入框左侧 `开启新对话` 后：
+  - abort 当前 SSE。
+  - 保存当前会话快照。
+  - 创建新的本地空会话。
+  - 切换到新会话。
+  - 首次发送时 `conversationId` 传 `null`，由后端创建真正的服务端 `conversationId`。
+- 新会话拿到 HTTP accepted 后，将服务端返回的 `conversationId` 回写到当前会话记录。
+
+边界规则：
+
+- 前端本地可以先生成 `localConversationId` 承载空会话；服务端 `conversationId` 返回后再绑定。
+- 已绑定服务端 `conversationId` 的会话，后续发送必须携带该 `conversationId`。
+- 空会话如果用户未发送任何消息，可以不展示在历史列表中，或仅在当前会话展示；推荐不展示，避免历史列表堆积空项。
+- 删除会话只删除前端本地存储，不调用后端删除接口。
+- 当前阶段不支持从后端拉取历史消息，也不做多端同步。
+- 正在流式生成的会话被切走或删除时，必须先 abort 当前 SSE，避免旧事件写入错误会话。
 
 ### 3.2 完整 3D 页面 `/cargo-3d`
 
@@ -237,21 +279,25 @@ Content-Type: application/json
 
 - `src/store/useChatStore.ts`
 - `src/views/agent-chat/index.tsx`
+- `src/layouts/ChatLayout.tsx`
 
 触发条件：
 
 - 页面首次加载。
 - 用户刷新页面。
+- 用户点击侧边对话历史二级菜单。
 
 输入：
 
-- localStorage 中 `ai-cargo-chat-cache` 对应的缓存数据。
+- localStorage 中对话索引和会话快照数据。
+- URL 中的 `conversationId` 查询参数。
 
 处理逻辑：
 
-- Zustand persist 自动读取缓存。
-- 只恢复 `messages`、`serverConversationId`、`activeArtifactId`。
-- 最多保留最近 `50` 条消息。
+- Zustand persist 自动读取当前激活会话。
+- 如果 URL 指定了 `conversationId`，优先加载该会话。
+- 如果没有指定 `conversationId`，加载最近一次激活会话。
+- 单个会话最多保留最近 `50` 条消息。
 - 如果恢复出的 assistant 消息处于 `pending`、`accepted`、`streaming`，统一改成 `cancelled`。
 - `AgentChat` 根据恢复后的 `messages.length` 判断是否展示历史消息区域。
 
@@ -260,12 +306,13 @@ Content-Type: application/json
 - 已完成聊天内容重新展示。
 - 已完成 artifact 仍可进入 `/cargo-3d` 查看。
 - 未完成流式消息不再 loading，而是显示已取消。
+- 左侧 `/chat` 二级菜单展示本地会话历史。
 
 边界规则：
 
 - 当前不做刷新后的 SSE 续接。
 - 当前不做服务端历史恢复。
-- localStorage 只作为临时体验缓存，不作为长期业务存档。
+- localStorage 只作为前端本地历史，不作为长期业务存档。
 
 #### 节点 03：聊天空态与输入态
 
@@ -276,7 +323,7 @@ Content-Type: application/json
 触发条件：
 
 - `messages.length === 0`。
-- 用户清除历史后回到空态。
+- 用户新开对话后回到空态。
 
 输入：
 
@@ -294,7 +341,7 @@ Content-Type: application/json
 
 - 用户可以输入自然语言。
 - 用户可以打开业务单号弹窗。
-- 用户可以清除历史。
+- 用户可以开启新对话。
 
 边界规则：
 
@@ -503,7 +550,7 @@ Content-Type: application/json
 - `eventId` 重复不处理。
 - `seq <= latestSeq` 不处理。
 - SSE 在 `message.done` 前关闭，视为异常。
-- 用户清除历史或组件卸载时，通过 `AbortController` 终止连接。
+- 用户新开对话、删除当前会话或组件卸载时，通过 `AbortController` 终止连接。
 
 #### 节点 09：SSE 事件分发与消息绑定
 
@@ -635,7 +682,7 @@ Content-Type: application/json
 - 收到 `message.done`。
 - 收到 `message.error`。
 - HTTP/SSE 抛出异常。
-- 用户清除历史或页面卸载触发 abort。
+- 用户新开对话、删除当前会话或页面卸载触发 abort。
 
 输入：
 
@@ -658,7 +705,7 @@ Content-Type: application/json
 边界规则：
 
 - 已经 `done` 或 `error` 的消息不会被 cancel 覆盖。
-- 清除历史会先 abort 当前 SSE，再清空 store。
+- 新开对话或删除当前会话会先 abort 当前 SSE，再切换当前会话状态。
 
 #### 节点 13：完整 3D 页面展示
 
@@ -778,7 +825,7 @@ Content-Type: application/json
 - 不修改 `data.plans` 内部业务结构。
 - 当前只支持 `cargo_packing_plans`。
 
-#### 节点 16：清除历史与退出清理
+#### 节点 16：新开对话、删除会话与退出清理
 
 代码入口：
 
@@ -787,7 +834,8 @@ Content-Type: application/json
 
 触发条件：
 
-- 用户点击“清除历史”。
+- 用户点击“开启新对话”。
+- 用户删除某条会话历史。
 - `AgentChat` 组件卸载。
 
 输入：
@@ -797,21 +845,23 @@ Content-Type: application/json
 
 处理逻辑：
 
-- 清除历史时先 abort 当前 SSE。
+- 新开对话或删除当前会话时先 abort 当前 SSE。
 - 清空 `abortControllerRef`。
-- 调用 `clearHistory` 清空 `serverConversationId`、`activeArtifactId`、`messages`。
-- Zustand persist 同步更新缓存为空状态。
+- 新开对话时保存当前会话快照，并创建一个新的空会话。
+- 删除会话时从本地会话索引和会话快照中移除目标会话。
+- 删除当前会话后，优先切换到最近一条剩余会话；如果没有剩余会话，则创建空会话。
+- Zustand persist 同步更新当前激活会话。
 - 组件卸载时，`useEffect` cleanup abort 当前 SSE。
 
 输出：
 
-- 页面回到欢迎空态。
-- 缓存中不再恢复旧聊天内容。
+- 新开对话后页面进入欢迎空态，但旧会话仍保留在侧边历史中。
+- 删除某条会话后，缓存中不再恢复该会话内容。
 - 后台 SSE 不再继续写入已卸载页面。
 
 边界规则：
 
-- 清除历史是前端本地清理，不会调用后端删除会话。
+- 删除会话是前端本地清理，不会调用后端删除会话。
 - 如果未来需要删除服务端历史，需要新增接口和确认弹窗。
 
 ## 4. HTTP 与 SSE 需求
@@ -1159,7 +1209,7 @@ ID 生成职责：
 
 ## 9. 聊天缓存方案
 
-当前阶段已采用方案一实现临时前端缓存。
+当前代码已采用方案一实现单会话临时缓存。侧边对话历史属于多会话本地历史，需要在现有方案上升级存储结构。
 
 ### 9.1 方案一：localStorage + Zustand persist
 
@@ -1198,7 +1248,7 @@ ID 生成职责：
 - 改动最小。
 - 不需要新增依赖。
 - 和现有 Zustand store 贴合。
-- 清除历史时会同步清空缓存状态。
+- 清理当前会话时会同步更新缓存状态。
 
 限制：
 
@@ -1263,8 +1313,89 @@ ID 生成职责：
 - 刷新页面后，最近聊天记录可以恢复。
 - 刷新页面后，已完成的 Markdown 和 artifact 可以继续查看。
 - 刷新前未完成的 assistant 消息恢复后显示为已取消。
-- 点击清除历史后，页面和缓存都清空。
-- 缓存最多保留最近 `50` 条消息，避免无限膨胀。
+- 新开对话后，旧会话仍保留在侧边历史中。
+- 删除某条会话后，该会话不再出现在侧边历史中。
+- 单个会话最多保留最近 `50` 条消息，避免无限膨胀。
+
+### 9.5 多会话历史推荐方案：localStorage 分片存储
+
+评估结论：
+
+- 当前协议已返回 `conversationId`，足够支撑“切回某个会话后继续发送消息”。
+- 当前没有服务端历史查询接口，无法从后端恢复旧消息；历史内容必须存前端本地。
+- 当前历史是前端体验增强，不是业务归档；第一阶段推荐继续使用 `localStorage`。
+- 不建议继续沿用单个 `ai-cargo-chat-cache` 保存全部会话，否则历史增加后每次写入都会重写大 JSON，容易触发容量和性能问题。
+
+推荐存储结构：
+
+```text
+ai-cargo-chat-history-index
+ai-cargo-chat-history-active
+ai-cargo-chat-history-session:{localConversationId}
+```
+
+`ai-cargo-chat-history-index` 保存轻量索引：
+
+```ts
+type ChatHistoryIndexItem = {
+  localConversationId: string;
+  serverConversationId: string | null;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  lastMessagePreview: string;
+};
+```
+
+`ai-cargo-chat-history-active` 保存当前激活会话：
+
+```ts
+type ActiveChatHistory = {
+  localConversationId: string;
+};
+```
+
+`ai-cargo-chat-history-session:{localConversationId}` 保存会话详情：
+
+```ts
+type ChatHistorySession = {
+  localConversationId: string;
+  serverConversationId: string | null;
+  activeArtifactId: string | null;
+  messages: ChatMessage[];
+};
+```
+
+写入策略：
+
+- 创建新对话时先生成 `localConversationId`，此时 `serverConversationId` 为 `null`。
+- 首次 HTTP accepted 后，把后端返回的 `conversationId` 写入当前会话详情和索引。
+- 每次消息变化后，只更新当前会话详情和索引摘要。
+- 索引按 `updatedAt` 倒序展示。
+- 单会话继续沿用最近 `50` 条消息上限。
+- 建议保留最近 `20` 到 `30` 个会话；超过数量时只清理最旧的本地会话。
+
+读取策略：
+
+- 打开 `/chat` 时读取 `ai-cargo-chat-history-active`。
+- 打开 `/chat?conversationId=xxx` 时先按 `serverConversationId` 匹配索引；匹配不到时按 `localConversationId` 匹配。
+- 找到会话后加载对应 session，并恢复 `messages/serverConversationId/activeArtifactId`。
+- 恢复时继续把未完成 assistant 消息改为 `cancelled`。
+
+删除策略：
+
+- 删除会话时删除索引项和对应 session key。
+- 如果删除的是当前会话，切换到最近更新的剩余会话。
+- 如果没有剩余会话，创建一个新的空会话。
+- 删除只影响前端本地历史，不向后端发送删除请求。
+
+升级到 IndexedDB 的触发条件：
+
+- 单个 artifact 或单个会话详情接近 localStorage 容量上限。
+- 会话历史需要超过 `30` 条。
+- 需要更细粒度地按 artifact、消息、会话做异步读取。
+- 需要降低大 JSON 同步写入对主线程的影响。
 
 ## 10. 性能需求
 
@@ -1297,7 +1428,7 @@ ID 生成职责：
 稳定性要求：
 
 - 组件卸载时必须 abort 当前 SSE。
-- 清除历史时必须 abort 当前 SSE。
+- 新开对话或删除当前会话时必须 abort 当前 SSE。
 - SSE 在 `message.done` 前异常关闭时视为错误。
 - `artifact.replace` 缺少 artifact 时忽略。
 - `data.plans` 不存在时不能调用 `.find` 导致崩溃。
@@ -1315,6 +1446,7 @@ ID 生成职责：
 - 多端会话同步。
 - 页面刷新后的未完成 SSE 恢复。
 - 服务端聊天历史持久化。
+- 服务端删除聊天历史。
 - cookie、x-trace 等自定义请求头接入。
 
 ## 13. 验收标准
@@ -1352,9 +1484,13 @@ ID 生成职责：
 
 聊天缓存：
 
-- 刷新页面后可以恢复最近聊天内容。
+- 刷新页面后可以恢复当前激活会话。
+- 左侧 `/chat` 二级菜单可以展示本地会话历史。
+- 点击某条历史可以切换到对应会话。
+- 每条历史可以单独删除。
+- 新开对话不会清空全部历史。
 - 未完成流式消息恢复后不继续 loading，而是显示为已取消。
-- 清除历史后刷新页面不会再恢复旧内容。
+- 删除某条会话后刷新页面不会再恢复该会话内容。
 
 ## 14. 待确认问题
 
@@ -1363,3 +1499,4 @@ ID 生成职责：
 - 大货量情况下单个 artifact 的最大数据规模。
 - 是否需要支持上传文件或从飞书/OSS 选择文件。
 - 是否需要将聊天历史持久化到后端。
+- 是否需要后端提供删除服务端会话历史接口。
