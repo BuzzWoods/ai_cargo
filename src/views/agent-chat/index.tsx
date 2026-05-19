@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { Bubble, Sender, Welcome, type BubbleItemType } from "@ant-design/x";
 import { Typography, Button } from "antd";
 import {
+  ArrowDownOutlined,
   CheckOutlined,
   CopyOutlined,
   DeleteOutlined,
   LoadingOutlined,
   MoreOutlined,
-  ProfileOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { Dropdown, type MenuProps } from "antd";
@@ -56,9 +56,14 @@ const AgentChat: React.FC = () => {
   // 当前只允许一个流式请求在跑；切换页面/清空历史时会 abort 这条请求。
   const abortControllerRef = useRef<AbortController | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
+  const historyScrollRef = useRef<HTMLDivElement | null>(null);
+  const programmaticScrollFrameRef = useRef<number | null>(null);
+  const programmaticScrollRef = useRef(false);
+  const stickToBottomRef = useRef(true);
   const [inputValue, setInputValue] = useState("");
   const [batchSelectorOpen, setBatchSelectorOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [previewSelections, setPreviewSelections] = useState<
     Record<string, CargoPreviewSelection>
   >({});
@@ -113,6 +118,98 @@ const AgentChat: React.FC = () => {
         message.status === "streaming"),
   );
 
+  const isNearScrollBottom = (element: HTMLDivElement) =>
+    element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+
+  const stopProgrammaticScrollMonitor = () => {
+    if (programmaticScrollFrameRef.current) {
+      window.cancelAnimationFrame(programmaticScrollFrameRef.current);
+      programmaticScrollFrameRef.current = null;
+    }
+  };
+
+  const monitorProgrammaticScroll = (startedAt: number) => {
+    const element = historyScrollRef.current;
+
+    if (!element) {
+      programmaticScrollRef.current = false;
+      stopProgrammaticScrollMonitor();
+      return;
+    }
+
+    const nearBottom = isNearScrollBottom(element);
+    const timedOut = performance.now() - startedAt > 1800;
+
+    if (nearBottom || timedOut) {
+      programmaticScrollRef.current = false;
+      stopProgrammaticScrollMonitor();
+      setShowScrollToBottom(!nearBottom);
+      return;
+    }
+
+    setShowScrollToBottom(false);
+    programmaticScrollFrameRef.current = window.requestAnimationFrame(() =>
+      monitorProgrammaticScroll(startedAt),
+    );
+  };
+
+  const scrollHistoryToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const element = historyScrollRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    programmaticScrollRef.current = behavior === "smooth";
+    stopProgrammaticScrollMonitor();
+
+    element.scrollTo({
+      top: element.scrollHeight,
+      behavior,
+    });
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+
+    if (behavior === "smooth") {
+      programmaticScrollFrameRef.current = window.requestAnimationFrame(() =>
+        monitorProgrammaticScroll(performance.now()),
+      );
+    } else {
+      programmaticScrollRef.current = false;
+    }
+  };
+
+  const handleHistoryScroll = () => {
+    const element = historyScrollRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const nearBottom = isNearScrollBottom(element);
+    if (programmaticScrollRef.current) {
+      if (nearBottom) {
+        programmaticScrollRef.current = false;
+      }
+      return;
+    }
+
+    stickToBottomRef.current = nearBottom;
+    setShowScrollToBottom(!nearBottom);
+  };
+
+  useEffect(() => {
+    if (!showHistory || !stickToBottomRef.current) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      scrollHistoryToBottom("auto");
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [messages, showHistory]);
+
   useEffect(() => {
     // 组件卸载时关闭 SSE，防止后台连接继续写入已卸载的页面。
     return () => {
@@ -120,6 +217,7 @@ const AgentChat: React.FC = () => {
       if (copyResetTimerRef.current) {
         window.clearTimeout(copyResetTimerRef.current);
       }
+      stopProgrammaticScrollMonitor();
     };
   }, []);
 
@@ -141,6 +239,8 @@ const AgentChat: React.FC = () => {
   const handleClearHistory = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
     setPreviewSelections({});
     clearHistory();
   };
@@ -257,6 +357,8 @@ const AgentChat: React.FC = () => {
     const localAssistantMessageId = addAssistantPlaceholder();
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
     setInputValue("");
     let currentServerRequestId: string | undefined;
     let currentServerMessageId: string | undefined;
@@ -325,6 +427,7 @@ const AgentChat: React.FC = () => {
             appendAssistantMarkdown(
               localAssistantMessageId,
               event.payload.delta,
+              event.seq,
             );
             return;
           }
@@ -338,6 +441,7 @@ const AgentChat: React.FC = () => {
             replaceAssistantArtifact(
               localAssistantMessageId,
               event.payload.artifact,
+              event.seq,
             );
             return;
           }
@@ -460,12 +564,6 @@ const AgentChat: React.FC = () => {
         loading={isStreaming}
         prefix={
           <div className="flex items-center gap-1">
-            <Button
-              type="text"
-              icon={<ProfileOutlined />}
-              title="选择业务单号"
-              onClick={() => setBatchSelectorOpen(true)}
-            />
             <Dropdown menu={{ items }} placement="topLeft">
               <Button type="text" icon={<MoreOutlined />} />
             </Dropdown>
@@ -477,7 +575,7 @@ const AgentChat: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-transparent">
-      <div className="flex-1 overflow-hidden p-4 flex flex-col">
+      <div className="relative flex flex-1 flex-col overflow-hidden p-4">
         {/* 顶部伸缩占位 - 用于将内容推向中间 */}
         <div
           className={`transition-all duration-500 ease-in-out flex flex-col items-center justify-end pb-4 ${
@@ -498,7 +596,7 @@ const AgentChat: React.FC = () => {
 
         {/* 聊天记录区域 */}
         <div
-          className={`mx-auto w-full max-w-4xl flex flex-col transition-all duration-500 ${
+          className={`w-full flex flex-col transition-all duration-500 ${
             showHistory
               ? "flex-1 min-h-0 opacity-100"
               : "h-0 opacity-0 overflow-hidden"
@@ -507,16 +605,33 @@ const AgentChat: React.FC = () => {
           {showHistory && (
             <>
               {/* {renderHeader()} */}
-              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-                <Bubble.List
-                  items={bubbleItems}
-                  className="h-full"
-                  autoScroll
-                />
+              <div
+                ref={historyScrollRef}
+                className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 scrollbar-hide"
+                onScroll={handleHistoryScroll}
+              >
+                <div className="mx-auto min-h-full w-full max-w-4xl py-2">
+                  <Bubble.List items={bubbleItems} />
+                </div>
               </div>
             </>
           )}
         </div>
+
+        {showHistory && showScrollToBottom ? (
+          <div className="pointer-events-none absolute inset-x-4 bottom-24 z-30 flex justify-center">
+            <div className="flex w-full max-w-4xl justify-end">
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<ArrowDownOutlined />}
+                className="pointer-events-auto shadow-lg"
+                aria-label="回到底部"
+                onClick={() => scrollHistoryToBottom()}
+              />
+            </div>
+          </div>
+        ) : null}
 
         {/* 输入框区域 - 在中间和底部之间平滑移动 */}
         <div

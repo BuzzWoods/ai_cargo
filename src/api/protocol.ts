@@ -16,6 +16,21 @@ export type MessageStatus =
   | "error"
   | "cancelled";
 
+export type AssistantContentBlock =
+  | {
+      id: string;
+      type: "markdown";
+      startSeq: number;
+      endSeq: number;
+      text: string;
+    }
+  | {
+      id: string;
+      type: "artifact";
+      seq: number;
+      artifactId: string;
+    };
+
 export interface CargoDimensions {
   w: number;
   h: number;
@@ -230,6 +245,7 @@ export interface AssistantMessageViewModel {
   status: MessageStatus;
   markdownText: string;
   artifacts: Record<string, CargoPackingPlansArtifact>;
+  contentBlocks: AssistantContentBlock[];
   startedAt?: string;
   finishedAt?: string;
   error?: string;

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
+  AssistantContentBlock,
   CargoPackingPlansArtifact,
   MessageStatus,
 } from "../api/protocol";
@@ -56,6 +57,7 @@ export interface AssistantMessage {
   status: MessageStatus;
   markdownText: string;
   artifacts: Record<string, CargoPackingPlansArtifact>;
+  contentBlocks: AssistantContentBlock[];
   timestamp: number;
   serverRequestId?: string;
   serverMessageId?: string;
@@ -89,10 +91,11 @@ interface ChatState {
       startedAt?: string;
     },
   ) => void;
-  appendAssistantMarkdown: (id: string, delta: string) => void;
+  appendAssistantMarkdown: (id: string, delta: string, seq: number) => void;
   replaceAssistantArtifact: (
     id: string,
     artifact: CargoPackingPlansArtifact,
+    seq: number,
   ) => void;
   completeAssistantMessage: (id: string, finishedAt?: string) => void;
   failAssistantMessage: (id: string, error: string) => void;
@@ -109,6 +112,122 @@ type CachedChatState = Pick<
 const isUnfinishedAssistantStatus = (status: MessageStatus) =>
   status === "pending" || status === "accepted" || status === "streaming";
 
+const isAssistantContentBlock = (
+  value: unknown,
+): value is AssistantContentBlock => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (record.type === "markdown") {
+    return (
+      typeof record.id === "string" &&
+      typeof record.startSeq === "number" &&
+      typeof record.endSeq === "number" &&
+      typeof record.text === "string"
+    );
+  }
+
+  return (
+    record.type === "artifact" &&
+    typeof record.id === "string" &&
+    typeof record.seq === "number" &&
+    typeof record.artifactId === "string"
+  );
+};
+
+const getNormalizedContentBlocks = (
+  message: AssistantMessage,
+): AssistantContentBlock[] => {
+  if (Array.isArray(message.contentBlocks)) {
+    return message.contentBlocks.filter(isAssistantContentBlock);
+  }
+
+  const fallbackBlocks: AssistantContentBlock[] = [];
+
+  if (message.markdownText) {
+    fallbackBlocks.push({
+      id: `${message.id}:markdown:fallback`,
+      type: "markdown",
+      startSeq: 0,
+      endSeq: 0,
+      text: message.markdownText,
+    });
+  }
+
+  Object.keys(message.artifacts ?? {}).forEach((artifactId, index) => {
+    fallbackBlocks.push({
+      id: `${message.id}:artifact:${artifactId}`,
+      type: "artifact",
+      seq: index + 1,
+      artifactId,
+    });
+  });
+
+  return fallbackBlocks;
+};
+
+const appendMarkdownBlock = (
+  message: AssistantMessage,
+  delta: string,
+  seq: number,
+): AssistantContentBlock[] => {
+  const contentBlocks = getNormalizedContentBlocks(message);
+  const lastBlock = contentBlocks[contentBlocks.length - 1];
+  const lastMarkdownBlock = lastBlock?.type === "markdown" ? lastBlock : null;
+
+  if (lastMarkdownBlock) {
+    return contentBlocks.map((block) =>
+      block.type === "markdown" && block.id === lastMarkdownBlock.id
+        ? {
+            ...block,
+            endSeq: seq,
+            text: `${block.text}${delta}`,
+          }
+        : block,
+    );
+  }
+
+  return [
+    ...contentBlocks,
+    {
+      id: `${message.id}:markdown:${seq}`,
+      type: "markdown",
+      startSeq: seq,
+      endSeq: seq,
+      text: delta,
+    },
+  ];
+};
+
+const appendArtifactBlock = (
+  message: AssistantMessage,
+  artifactId: string,
+  seq: number,
+): AssistantContentBlock[] => {
+  const contentBlocks = getNormalizedContentBlocks(message);
+
+  if (
+    contentBlocks.some(
+      (block) => block.type === "artifact" && block.artifactId === artifactId,
+    )
+  ) {
+    return contentBlocks;
+  }
+
+  return [
+    ...contentBlocks,
+    {
+      id: `${message.id}:artifact:${artifactId}`,
+      type: "artifact",
+      seq,
+      artifactId,
+    },
+  ];
+};
+
 const normalizeCachedMessages = (messages: ChatMessage[]) =>
   messages.slice(-MAX_CACHED_MESSAGES).map((message) => {
     if (message.role === "user") {
@@ -121,6 +240,7 @@ const normalizeCachedMessages = (messages: ChatMessage[]) =>
         ...message,
         status: "cancelled",
         error: message.error ?? "页面刷新后已停止本次生成",
+        contentBlocks: getNormalizedContentBlocks(message),
       } satisfies AssistantMessage;
     }
 
@@ -128,6 +248,7 @@ const normalizeCachedMessages = (messages: ChatMessage[]) =>
       ...message,
       artifacts: message.artifacts ?? {},
       markdownText: message.markdownText ?? "",
+      contentBlocks: getNormalizedContentBlocks(message),
     } satisfies AssistantMessage;
   });
 
@@ -220,6 +341,7 @@ export const useChatStore = create<ChatState>()(
               status: "pending",
               markdownText: "",
               artifacts: {},
+              contentBlocks: [],
               timestamp: Date.now(),
             },
           ],
@@ -253,17 +375,18 @@ export const useChatStore = create<ChatState>()(
           })),
         }));
       },
-      appendAssistantMarkdown: (id, delta) => {
+      appendAssistantMarkdown: (id, delta, seq) => {
         // markdown.delta 是增量文本，必须 append；SSE 去重在 api/chat.ts 做。
         set((state) => ({
           messages: updateAssistantMessage(state.messages, id, (message) => ({
             ...message,
             status: "streaming",
             markdownText: `${message.markdownText}${delta}`,
+            contentBlocks: appendMarkdownBlock(message, delta, seq),
           })),
         }));
       },
-      replaceAssistantArtifact: (id, artifact) => {
+      replaceAssistantArtifact: (id, artifact, seq) => {
         // artifact.replace 表示同一个 artifact id 的 3D 结构可被后端不断刷新。
         set((state) => ({
           activeArtifactId: artifact.id,
@@ -274,6 +397,7 @@ export const useChatStore = create<ChatState>()(
               ...message.artifacts,
               [artifact.id]: artifact,
             },
+            contentBlocks: appendArtifactBlock(message, artifact.id, seq),
           })),
         }));
       },
