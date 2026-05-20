@@ -24,14 +24,6 @@ const ChatLayout: React.FC = () => {
           className="z-10 flex items-center justify-between px-4"
         >
           <div className="ml-6 text-lg font-bold">智慧小柜</div>
-          <div className="flex items-center pr-4 space-x-4">
-            <div className="w-8 h-8 overflow-hidden bg-blue-500 rounded-full">
-              <img
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-                alt="avatar"
-              />
-            </div>
-          </div>
         </Header>
         <Content
           style={{

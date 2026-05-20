@@ -707,16 +707,14 @@ const AgentChat: React.FC = () => {
 
         {showHistory && showScrollToBottom ? (
           <div className="pointer-events-none absolute inset-x-4 bottom-24 z-30 flex justify-center">
-            <div className="flex w-full max-w-4xl justify-end">
-              <Button
-                type="primary"
-                shape="circle"
-                icon={<ArrowDownOutlined />}
-                className="pointer-events-auto shadow-lg"
-                aria-label="回到底部"
-                onClick={() => scrollHistoryToBottom()}
-              />
-            </div>
+            <Button
+              type="text"
+              shape="circle"
+              icon={<ArrowDownOutlined />}
+              className="pointer-events-auto scroll-to-bottom-btn"
+              aria-label="回到底部"
+              onClick={() => scrollHistoryToBottom()}
+            />
           </div>
         ) : null}
 

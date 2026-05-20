@@ -194,68 +194,88 @@ const AppSidebar: React.FC = () => {
     <aside
       className={`app-sidebar ${collapsed ? "app-sidebar-collapsed" : ""}`}
     >
-      <div className="app-sidebar-toggle-row">
-        <Tooltip title={collapsed ? "展开" : "关闭侧边"} placement="right">
-          <button
-            type="button"
-            className="app-sidebar-toggle"
-            onClick={() => setCollapsed((current) => !current)}
-            aria-label={collapsed ? "展开侧边栏" : "关闭侧边栏"}
-          >
-            {collapsed ? (
-              <PanelLeftOpen size={18} strokeWidth={1.9} />
-            ) : (
-              <PanelLeftClose size={18} strokeWidth={1.9} />
-            )}
-          </button>
-        </Tooltip>
-      </div>
-
-      <nav className="app-sidebar-nav" aria-label="主导航">
-        {renderItem({
-          icon: <SquarePen size={18} strokeWidth={1.9} />,
-          label: "开启新对话",
-          onClick: handleStartNewConversation,
-        })}
-
-        <div className="app-sidebar-chat-group">
-          {collapsed ? (
-            <Popover
-              placement="rightTop"
-              content={renderHistoryContent(true)}
-              trigger="click"
-              arrow={false}
-              overlayInnerStyle={{ padding: '8px' }}
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="app-sidebar-toggle-row">
+          <Tooltip title={collapsed ? "展开" : "关闭侧边"} placement="right">
+            <button
+              type="button"
+              className="app-sidebar-toggle"
+              onClick={() => setCollapsed((current) => !current)}
+              aria-label={collapsed ? "展开侧边栏" : "关闭侧边栏"}
             >
-              <div>
+              {collapsed ? (
+                <PanelLeftOpen size={18} strokeWidth={1.9} />
+              ) : (
+                <PanelLeftClose size={18} strokeWidth={1.9} />
+              )}
+            </button>
+          </Tooltip>
+        </div>
+
+        <nav className="app-sidebar-nav" aria-label="主导航">
+          {renderItem({
+            icon: <SquarePen size={18} strokeWidth={1.9} />,
+            label: "开启新对话",
+            onClick: handleStartNewConversation,
+          })}
+
+          <div className="app-sidebar-chat-group">
+            {collapsed ? (
+              <Popover
+                placement="rightTop"
+                content={renderHistoryContent(true)}
+                trigger="click"
+                arrow={false}
+                overlayInnerStyle={{ padding: '8px' }}
+              >
+                <div>
+                  {renderItem({
+                    active: isChatRoute,
+                    icon: <MessageSquare size={18} strokeWidth={1.9} />,
+                    label: "对话历史",
+                    onClick: () => navigateToActiveConversation(),
+                  })}
+                </div>
+              </Popover>
+            ) : (
+              <>
                 {renderItem({
                   active: isChatRoute,
                   icon: <MessageSquare size={18} strokeWidth={1.9} />,
                   label: "对话历史",
                   onClick: () => navigateToActiveConversation(),
                 })}
-              </div>
-            </Popover>
-          ) : (
-            <>
-              {renderItem({
-                active: isChatRoute,
-                icon: <MessageSquare size={18} strokeWidth={1.9} />,
-                label: "对话历史",
-                onClick: () => navigateToActiveConversation(),
-              })}
-              {renderHistoryContent(false)}
-            </>
-          )}
-        </div>
+                {renderHistoryContent(false)}
+              </>
+            )}
+          </div>
 
-        {renderItem({
-          active: isCargoRoute,
-          icon: <Box size={18} strokeWidth={1.9} />,
-          label: "3D 视图",
-          onClick: () => navigate("/cargo-3d"),
-        })}
-      </nav>
+          {renderItem({
+            active: isCargoRoute,
+            icon: <Box size={18} strokeWidth={1.9} />,
+            label: "3D 视图",
+            onClick: () => navigate("/cargo-3d"),
+          })}
+        </nav>
+      </div>
+
+      <div className="app-sidebar-footer">
+        <Tooltip title={collapsed ? "Felix" : ""} placement="right">
+          <div className="flex items-center gap-3 cursor-pointer">
+            <div className="app-sidebar-avatar-container">
+              <div className="app-sidebar-avatar-wrap">
+                <img
+                  src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+                  alt="avatar"
+                />
+              </div>
+            </div>
+            <span className="app-sidebar-label font-medium text-sm text-slate-700">
+              Felix
+            </span>
+          </div>
+        </Tooltip>
+      </div>
     </aside>
   );
 };

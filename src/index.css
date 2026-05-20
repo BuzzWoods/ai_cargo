@@ -34,6 +34,9 @@ body {
     width 180ms ease,
     flex-basis 180ms ease;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .app-sidebar-collapsed {
@@ -355,4 +358,104 @@ body {
 
 .shipment-batch-child-table .ant-table {
   background: transparent;
+}
+
+/* 全局极简现代滚动条样式，彻底解决各处默认滚动条粗大丑陋的问题 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.24); /* slate-400 带有透明度 */
+  border-radius: 99px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45); /* 悬浮时颜色稍深 */
+}
+
+/* Firefox 滚动条适配 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
+}
+
+/* 聊天“回到底部”悬浮按钮高端毛玻璃及微动效样式 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.scroll-to-bottom-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  color: #475569 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+  cursor: pointer;
+  animation: fadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.scroll-to-bottom-btn:hover {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(203, 213, 225, 1) !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* 侧边栏页脚及头像区域样式，保障在收缩和展开模式下完美垂直对齐 */
+.app-sidebar-footer {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 20px;
+  border-top: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.app-sidebar-avatar-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.app-sidebar-avatar-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; /* 头像大小从 40px 精细调整为 34px，精致高级 */
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  border: 1px solid #f1f5f9;
+}
+
+.app-sidebar-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }

@@ -27,12 +27,32 @@ import {
 
 const { Paragraph, Text, Title } = Typography;
 
+// 风险级别到标签颜色的映射字典，兼容大小写
 const riskColorByLevel: Record<string, string> = {
+  HIGH: "red",
+  MEDIUM: "orange",
+  LOW: "blue",
   high: "red",
   medium: "orange",
   low: "blue",
+  WARNING: "orange",
   warning: "orange",
+  ERROR: "red",
   error: "red",
+};
+
+// 风险级别到中文友好文案的翻译字典，兼容大小写
+const riskLevelLabel: Record<string, string> = {
+  LOW: "低风险",
+  MEDIUM: "中风险",
+  HIGH: "高风险",
+  low: "低风险",
+  medium: "中风险",
+  high: "高风险",
+  WARNING: "警告",
+  warning: "警告",
+  ERROR: "错误",
+  error: "错误",
 };
 
 interface CargoPackingPreviewWorkspaceProps {
@@ -323,10 +343,10 @@ const CargoPackingPreviewWorkspace: React.FC<
                       className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"
                     >
                       <Tag
-                        color={riskColorByLevel[risk.level] ?? "default"}
+                        color={riskColorByLevel[risk.level] ?? riskColorByLevel[risk.level.toLowerCase()] ?? "default"}
                         className="mb-1"
                       >
-                        {risk.level}
+                        {riskLevelLabel[risk.level] ?? risk.level}
                       </Tag>
                       {risk.message}
                     </div>

@@ -38,15 +38,20 @@ export interface CargoLayoutContainerView {
   };
 }
 
+// 现代精美且区分度极高的颜色调色盘，共12种颜色，并经过合理的冷暖/明暗交替排序，保证高对比度
 const palette = [
-  "#60a5fa",
-  "#34d399",
-  "#fbbf24",
-  "#fb7185",
-  "#a78bfa",
-  "#2dd4bf",
-  "#f97316",
-  "#94a3b8",
+  "#3b82f6", // 0: 活力蓝 (Vibrant Blue)
+  "#f97316", // 1: 活力橙 (Vibrant Orange)
+  "#10b981", // 2: 翡翠绿 (Emerald Green)
+  "#ec4899", // 3: 亮丽粉 (Vivid Pink)
+  "#eab308", // 4: 暖金色 (Warm Gold)
+  "#8b5cf6", // 5: 深紫色 (Deep Purple)
+  "#06b6d4", // 6: 电性青 (Electric Cyan)
+  "#ef4444", // 7: 绯红色 (Crimson Red)
+  "#6366f1", // 8: 皇家靛 (Royal Indigo)
+  "#84cc16", // 9: 亮柠绿 (Bright Lime)
+  "#0f766e", // 10: 暗青绿 (Dark Teal)
+  "#d946ef", // 11: 洋红色 (Magenta)
 ];
 
 const hashString = (value: string) => {
@@ -59,8 +64,19 @@ const hashString = (value: string) => {
   return hash;
 };
 
-const getItemColor = (item: CargoPackingItem) =>
-  palette[hashString(item.skuCode || item.boxId) % palette.length];
+// 获取货箱颜色。如果传入了当前计划下的唯一 SKU 排序列表，则通过跳步算法分配极具对比度的稳定颜色；
+// 否则，回退到基于 SKU 或 boxId 哈希的稳定颜色分配。
+const getItemColor = (item: CargoPackingItem, uniqueSkus?: string[]) => {
+  const identifier = item.skuCode || item.boxId;
+  if (uniqueSkus && uniqueSkus.length > 0) {
+    const index = uniqueSkus.indexOf(identifier);
+    if (index !== -1) {
+      // 使用步长 5（与调色盘大小 12 互质），确保相邻的 SKU 能够映射到调色盘中距离极远的颜色上，彻底避免相邻色
+      return palette[(index * 5) % palette.length];
+    }
+  }
+  return palette[hashString(identifier) % palette.length];
+};
 
 const getPlacementId = (
   packingContainer: CargoPackingContainer,
@@ -144,6 +160,7 @@ const createPlacement = (
   packingContainer: CargoPackingContainer,
   item: CargoPackingItem,
   offset = { x: 0, y: 0, z: 0 },
+  uniqueSkus?: string[],
 ): CargoPlacement => {
   const placementId = getPlacementId(packingContainer, item);
   const cargoId = placementId;
@@ -171,7 +188,7 @@ const createPlacement = (
           .plus(offset.z),
       ),
     },
-    color: getItemColor(item),
+    color: getItemColor(item, uniqueSkus),
     meta: {
       item,
       packingContainer,
@@ -189,6 +206,20 @@ const createCargoSpec = (item: CargoPackingItem): CargoSpec => ({
   volumeM3: item.volumeCbm,
 });
 
+// 获取计划中所有货物的唯一 SKU 列表并排序，用于稳定且高区分度的颜色映射
+export const getUniqueSkusInPlan = (plan: CargoPackingPlan | null) => {
+  if (!plan) {
+    return [];
+  }
+  const skus = new Set<string>();
+  plan.containers.forEach((container) => {
+    container.items.forEach((item) => {
+      skus.add(item.skuCode || item.boxId);
+    });
+  });
+  return Array.from(skus).sort();
+};
+
 export const createCargoLayoutView = (
   artifact: CargoPackingPlansArtifact | null,
   plan: CargoPackingPlan | null,
@@ -198,6 +229,8 @@ export const createCargoLayoutView = (
     return null;
   }
 
+  const uniqueSkus = getUniqueSkusInPlan(plan);
+
   // 后端给的是箱内后端坐标；这里转换成 three.js 的中心点坐标，供 mesh.position 使用。
   const cargoSpecs = Object.fromEntries(
     packingContainer.items.map((item) => [
@@ -206,7 +239,7 @@ export const createCargoLayoutView = (
     ]),
   );
   const placements = packingContainer.items.map((item) =>
-    createPlacement(packingContainer, item),
+    createPlacement(packingContainer, item, { x: 0, y: 0, z: 0 }, uniqueSkus),
   );
   const container: CargoContainer = {
     id: packingContainer.containerNo,
@@ -350,9 +383,15 @@ export const createCargoPackingSceneView = (
       ]),
     ),
   );
+  const uniqueSkus = getUniqueSkusInPlan(plan);
   const placements = containerViews.flatMap((containerView) =>
     containerView.packingContainer.items.map((item) =>
-      createPlacement(containerView.packingContainer, item, containerView.offset),
+      createPlacement(
+        containerView.packingContainer,
+        item,
+        containerView.offset,
+        uniqueSkus,
+      ),
     ),
   );
 

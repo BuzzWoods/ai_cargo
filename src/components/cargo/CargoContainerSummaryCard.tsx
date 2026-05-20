@@ -30,9 +30,6 @@ const CargoContainerSummaryCard = ({
         </Title>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <Tag color="gold" variant="filled" className="m-0">
-          {container.containerType}
-        </Tag>
         <Tag color="blue" variant="filled" className="m-0">
           {plan.recommended ? "推荐计划" : plan.strategyCode}
         </Tag>
@@ -83,12 +80,20 @@ const CargoContainerSummaryCard = ({
     </div>
 
     <div className="mt-3 border-t border-amber-100 pt-3 text-sm">
-      <div className={labelClassName}>内尺寸</div>
-      <div className={valueClassName}>
-        {container.innerLength} x {container.innerWidth} x{" "}
-        {container.innerHeight} m
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <div className={labelClassName}>货柜类型</div>
+          <div className={valueClassName}>{container.containerType}</div>
+        </div>
+        <div>
+          <div className={labelClassName}>内尺寸</div>
+          <div className={valueClassName}>
+            {container.innerLength} x {container.innerWidth} x{" "}
+            {container.innerHeight} m
+          </div>
+        </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         <Tag color="cyan" variant="filled" className="m-0">
           {plan.summary.containerMix}
         </Tag>
