@@ -50,6 +50,13 @@
 - `markdown.delta`
 - `artifact.replace`
 
+当前协议里，`markdown.delta` 只表示一段 Markdown 增量，**没有**内置 `segmentType` 语义来区分“进度文案”还是“正式正文”。因此：
+
+- 前端不能只靠纯文本兜底判断进度态
+- 如果需要“正文生成后自动隐藏进度文案”，后端需要在流式内容里显式补充 `segmentType`
+- 推荐约定为：`segmentType: "progress"` 表示中间态提示，`segmentType: "body"` 表示正式正文
+- 在后端未升级前，前端只能做兼容降级，不能把文本内容当协议边界
+
 其中 3D 结构化数据以当前代码为准，统一使用：
 
 ```json

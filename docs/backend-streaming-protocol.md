@@ -394,6 +394,9 @@ X-Accel-Buffering: no
 - 前端直接 append 所有 `delta`
 - `delta` 是增量文本，不是全量文本
 - 输出标准 markdown 字符串即可
+- 当前协议没有区分“进度文案”和“正式正文”的 `segmentType`
+- 如果需要前端在正文出现后自动隐藏进度提示，建议后端升级为显式分段字段，例如在 payload 中增加 `segmentType: "progress" | "body"`
+- 在该字段未上线前，前端只能把 `markdown.delta` 当作纯正文流处理，无法可靠判断哪一段该隐藏
 
 ## 7.3 `artifact.replace`
 

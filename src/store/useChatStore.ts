@@ -199,6 +199,14 @@ const isAssistantContentBlock = (
     );
   }
 
+  if (record.type === "progress" || record.segmentType === "progress") {
+    return (
+      typeof record.id === "string" &&
+      typeof record.seq === "number" &&
+      typeof record.text === "string"
+    );
+  }
+
   return (
     record.type === "artifact" &&
     typeof record.id === "string" &&
@@ -207,11 +215,49 @@ const isAssistantContentBlock = (
   );
 };
 
+const isProgressContentBlock = (
+  value: AssistantContentBlock,
+): value is Extract<AssistantContentBlock, { type: "progress" }> =>
+  value.type === "progress";
+
+const normalizeAssistantContentBlock = (
+  value: unknown,
+): AssistantContentBlock | null => {
+  if (!isAssistantContentBlock(value)) {
+    return null;
+  }
+
+  if (isProgressContentBlock(value)) {
+    return {
+      id: value.id,
+      type: "progress",
+      segmentType: "progress",
+      seq: value.seq,
+      text: value.text,
+    };
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record.type === "progress" || record.segmentType === "progress") {
+    return {
+      id: record.id as string,
+      type: "progress",
+      segmentType: "progress",
+      seq: record.seq as number,
+      text: record.text as string,
+    };
+  }
+
+  return value;
+};
+
 const getNormalizedContentBlocks = (
   message: AssistantMessage,
 ): AssistantContentBlock[] => {
   if (Array.isArray(message.contentBlocks)) {
-    return message.contentBlocks.filter(isAssistantContentBlock);
+    return message.contentBlocks
+      .map(normalizeAssistantContentBlock)
+      .filter((block): block is AssistantContentBlock => block !== null);
   }
 
   const fallbackBlocks: AssistantContentBlock[] = [];

@@ -10,6 +10,7 @@ import {
   getPlanByNo,
   getPreferredPlan,
 } from "../cargo/cargoPackingView";
+import { Loader2 } from "lucide-react";
 
 const { Text } = Typography;
 
@@ -51,6 +52,23 @@ export const getVisibleAssistantMarkdown = (markdownText: string) => {
 
   return contentLines.length ? contentLines.join("\n") : markdownText;
 };
+
+const isProgressBlock = (
+  block: AssistantContentBlock,
+): block is Extract<AssistantContentBlock, { type: "progress" }> =>
+  block.type === "progress";
+
+const renderProgressBlock = (
+  block: Extract<AssistantContentBlock, { type: "progress" }>,
+) => (
+  <div
+    key={block.id}
+    className="inline-flex max-w-full items-center gap-2 rounded-xl border border-slate-200/70 bg-white/70 px-3 py-2 text-sm text-slate-500"
+  >
+    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />
+    <span className="min-w-0 break-words">{block.text}</span>
+  </div>
+);
 
 const AssistantMessageContent = ({
   message,
@@ -185,8 +203,18 @@ const AssistantMessageContent = ({
       ];
 
   // contentBlocks 记录 SSE 到达顺序，因此 3D 卡片不再固定显示在整段 Markdown 后面。
+  const hasFormalContent = contentBlocks.some(
+    (block) => !isProgressBlock(block),
+  );
+  const visibleProgressBlock = hasFormalContent
+    ? null
+    : ([...contentBlocks].reverse().find(isProgressBlock) ?? null);
   const contentNodes = contentBlocks
     .map((block) => {
+      if (isProgressBlock(block)) {
+        return null;
+      }
+
       if (block.type === "markdown") {
         const visibleMarkdown = getVisibleAssistantMarkdown(block.text);
 
@@ -198,10 +226,13 @@ const AssistantMessageContent = ({
       return renderArtifactPreview(block.artifactId, block.id);
     })
     .filter(Boolean);
+  const hasVisibleContent =
+    Boolean(visibleProgressBlock) || contentNodes.length > 0;
 
   return (
     <div className="min-w-[280px] max-w-full space-y-4">
-      {contentNodes.length ? (
+      {visibleProgressBlock ? renderProgressBlock(visibleProgressBlock) : null}
+      {hasVisibleContent ? (
         contentNodes
       ) : (
         <Text type="secondary">

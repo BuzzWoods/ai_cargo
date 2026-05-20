@@ -550,6 +550,11 @@ const AgentChat: React.FC = () => {
 
     const assistantMessage = message as AssistantMessage;
     const hasArtifact = Object.keys(assistantMessage.artifacts).length > 0;
+    const hasAssistantContentBlocks = assistantMessage.contentBlocks.length > 0;
+    const isAssistantGenerating =
+      message.status === "pending" ||
+      message.status === "accepted" ||
+      message.status === "streaming";
     const assistantCopyText = [
       getVisibleAssistantMarkdown(assistantMessage.markdownText),
       assistantMessage.status === "error" && assistantMessage.error
@@ -575,9 +580,7 @@ const AgentChat: React.FC = () => {
         placement: "start",
         text: assistantCopyText,
         status:
-          message.status === "pending" ||
-          message.status === "accepted" ||
-          message.status === "streaming" ? (
+          isAssistantGenerating && !hasAssistantContentBlocks ? (
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <LoadingOutlined />
               <span>正在为您规划装箱方案...</span>
@@ -591,11 +594,10 @@ const AgentChat: React.FC = () => {
       role: message.role,
       placement: "start",
       loading:
+        !hasAssistantContentBlocks &&
         !message.markdownText &&
         !hasArtifact &&
-        (message.status === "pending" ||
-          message.status === "accepted" ||
-          message.status === "streaming"),
+        isAssistantGenerating,
       variant: "borderless",
     };
   });

@@ -26,6 +26,13 @@ export type AssistantContentBlock =
     }
   | {
       id: string;
+      type: "progress";
+      segmentType: "progress";
+      seq: number;
+      text: string;
+    }
+  | {
+      id: string;
       type: "artifact";
       seq: number;
       artifactId: string;
