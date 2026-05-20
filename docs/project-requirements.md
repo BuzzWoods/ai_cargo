@@ -50,12 +50,15 @@
 - `markdown.delta`
 - `artifact.replace`
 
-当前协议里，`markdown.delta` 只表示一段 Markdown 增量，**没有**内置 `segmentType` 语义来区分“进度文案”还是“正式正文”。因此：
+当前 `markdown.delta.payload` 支持使用 `segmentType` 区分“进度文案”和“正式正文”。因此：
 
-- 前端不能只靠纯文本兜底判断进度态
-- 如果需要“正文生成后自动隐藏进度文案”，后端需要在流式内容里显式补充 `segmentType`
-- 推荐约定为：`segmentType: "progress"` 表示中间态提示，`segmentType: "body"` 表示正式正文
-- 在后端未升级前，前端只能做兼容降级，不能把文本内容当协议边界
+- 前端不再靠纯文本兜底判断进度态。
+- `segmentType: "progress"` 表示中间态提示，只进入 progress 内容块，不进入正式 Markdown。
+- `segmentType: "body"` 表示正式正文，会 append 到 assistant 的 `markdownText`。
+- 未携带 `segmentType` 的历史协议按 `body` 兼容处理。
+- `progress` 可以出现在流的任意位置，前端按内容块顺序判断。
+- 某个 `progress` 后面一旦出现正文或 artifact，该 `progress` 会被隐藏。
+- 如果最新内容块仍是 `progress`，即使它前面已经有正文或 artifact，也应临时展示。
 
 其中 3D 结构化数据以当前代码为准，统一使用：
 

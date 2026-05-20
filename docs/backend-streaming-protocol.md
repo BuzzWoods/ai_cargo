@@ -385,6 +385,7 @@ X-Accel-Buffering: no
 ```json
 {
   "format": "markdown",
+  "segmentType": "body",
   "delta": "## 装箱方案\n\n"
 }
 ```
@@ -394,9 +395,12 @@ X-Accel-Buffering: no
 - 前端直接 append 所有 `delta`
 - `delta` 是增量文本，不是全量文本
 - 输出标准 markdown 字符串即可
-- 当前协议没有区分“进度文案”和“正式正文”的 `segmentType`
-- 如果需要前端在正文出现后自动隐藏进度提示，建议后端升级为显式分段字段，例如在 payload 中增加 `segmentType: "progress" | "body"`
-- 在该字段未上线前，前端只能把 `markdown.delta` 当作纯正文流处理，无法可靠判断哪一段该隐藏
+- `segmentType: "progress"` 表示进度提示，前端只临时展示，不写入正式 Markdown。
+- `segmentType: "body"` 表示正式正文，前端会 append 到 assistant 的 `markdownText`。
+- 未携带 `segmentType` 的历史协议按 `body` 兼容处理。
+- `progress` 可以出现在流的任意位置，前端按内容块顺序判断。
+- 某个 `progress` 后面一旦出现正文或 artifact，该 `progress` 会被隐藏。
+- 如果最新内容块仍是 `progress`，即使它前面已经有正文或 artifact，也应临时展示。
 
 ## 7.3 `artifact.replace`
 

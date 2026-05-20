@@ -117,6 +117,7 @@ interface ChatState {
     },
   ) => void;
   appendAssistantMarkdown: (id: string, delta: string, seq: number) => void;
+  appendAssistantProgress: (id: string, text: string, seq: number) => void;
   replaceAssistantArtifact: (
     id: string,
     artifact: CargoPackingPlansArtifact,
@@ -316,6 +317,21 @@ const appendMarkdownBlock = (
     },
   ];
 };
+
+const appendProgressBlock = (
+  message: AssistantMessage,
+  text: string,
+  seq: number,
+): AssistantContentBlock[] => [
+  ...getNormalizedContentBlocks(message),
+  {
+    id: `${message.id}:progress:${seq}`,
+    type: "progress",
+    segmentType: "progress",
+    seq,
+    text,
+  },
+];
 
 const appendArtifactBlock = (
   message: AssistantMessage,
@@ -775,6 +791,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           status: "streaming",
           markdownText: `${message.markdownText}${delta}`,
           contentBlocks: appendMarkdownBlock(message, delta, seq),
+        })),
+      };
+
+      return {
+        messages: nextState.messages,
+        historyIndex: persistCurrentState(nextState),
+      };
+    });
+  },
+  appendAssistantProgress: (id, text, seq) => {
+    set((state) => {
+      const nextState = {
+        ...state,
+        messages: updateAssistantMessage(state.messages, id, (message) => ({
+          ...message,
+          status: "streaming",
+          contentBlocks: appendProgressBlock(message, text, seq),
         })),
       };
 

@@ -29,29 +29,8 @@ interface AssistantMessageContentProps {
   ) => void;
 }
 
-const streamingProgressTexts = [
-  "正在读取业务数据...",
-  "正在解析业务诉求...",
-  "正在计算排柜方案...",
-  "正在生成方案说明...",
-];
-
-const normalizeLine = (line: string) => line.trim().replace(/\s+/g, "");
-
-const isStreamingProgressLine = (line: string) => {
-  const normalizedLine = normalizeLine(line);
-
-  return streamingProgressTexts.some(
-    (progressText) => normalizedLine === normalizeLine(progressText),
-  );
-};
-
-export const getVisibleAssistantMarkdown = (markdownText: string) => {
-  const lines = markdownText.split(/\r?\n/);
-  const contentLines = lines.filter((line) => !isStreamingProgressLine(line));
-
-  return contentLines.length ? contentLines.join("\n") : markdownText;
-};
+export const getVisibleAssistantMarkdown = (markdownText: string) =>
+  markdownText;
 
 const isProgressBlock = (
   block: AssistantContentBlock,
@@ -202,17 +181,24 @@ const AssistantMessageContent = ({
         })),
       ];
 
-  // contentBlocks 记录 SSE 到达顺序，因此 3D 卡片不再固定显示在整段 Markdown 后面。
-  const hasFormalContent = contentBlocks.some(
-    (block) => !isProgressBlock(block),
+  // progress 可以出现在流的任意位置：只有它后面已经有正文或 artifact 时才隐藏。
+  const latestProgressIndex = contentBlocks.reduce(
+    (latestIndex, block, index) => (isProgressBlock(block) ? index : latestIndex),
+    -1,
   );
-  const visibleProgressBlock = hasFormalContent
-    ? null
-    : ([...contentBlocks].reverse().find(isProgressBlock) ?? null);
+  const visibleProgressBlockId =
+    latestProgressIndex >= 0 &&
+    !contentBlocks
+      .slice(latestProgressIndex + 1)
+      .some((block) => !isProgressBlock(block))
+      ? contentBlocks[latestProgressIndex].id
+      : null;
   const contentNodes = contentBlocks
     .map((block) => {
       if (isProgressBlock(block)) {
-        return null;
+        return block.id === visibleProgressBlockId
+          ? renderProgressBlock(block)
+          : null;
       }
 
       if (block.type === "markdown") {
@@ -227,11 +213,10 @@ const AssistantMessageContent = ({
     })
     .filter(Boolean);
   const hasVisibleContent =
-    Boolean(visibleProgressBlock) || contentNodes.length > 0;
+    Boolean(visibleProgressBlockId) || contentNodes.length > 0;
 
   return (
     <div className="min-w-[280px] max-w-full space-y-4">
-      {visibleProgressBlock ? renderProgressBlock(visibleProgressBlock) : null}
       {hasVisibleContent ? (
         contentNodes
       ) : (

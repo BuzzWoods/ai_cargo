@@ -102,6 +102,7 @@ const AgentChat: React.FC = () => {
     bindUserServerConversationId,
     bindAssistantServerMeta,
     appendAssistantMarkdown,
+    appendAssistantProgress,
     replaceAssistantArtifact,
     completeAssistantMessage,
     failAssistantMessage,
@@ -478,12 +479,20 @@ const AgentChat: React.FC = () => {
           }
 
           if (event.type === "markdown.delta") {
-            // 文本是 markdown 增量，页面边收边渲染。
-            appendAssistantMarkdown(
-              localAssistantMessageId,
-              event.payload.delta,
-              event.seq,
-            );
+            if (event.payload.segmentType === "progress") {
+              appendAssistantProgress(
+                localAssistantMessageId,
+                event.payload.delta,
+                event.seq,
+              );
+            } else {
+              // 未带 segmentType 的历史协议按正式正文兼容处理。
+              appendAssistantMarkdown(
+                localAssistantMessageId,
+                event.payload.delta,
+                event.seq,
+              );
+            }
             return;
           }
 

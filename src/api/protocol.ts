@@ -204,6 +204,7 @@ export interface MessageStartPayload {
 
 export interface MarkdownDeltaPayload {
   format: "markdown";
+  segmentType?: "progress" | "body";
   delta: string;
 }
 
